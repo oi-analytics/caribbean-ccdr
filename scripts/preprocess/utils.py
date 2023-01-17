@@ -41,12 +41,12 @@ def extract_gdf_values_containing_nodes(x, input_gdf, column_name):
 def load_config():
     """Read config.json
     """
-    config_path = os.path.join(os.path.dirname(__file__),'..', '..','..', 'config.json')
+    config_path = os.path.join(os.path.dirname(__file__),'..', '..', 'config.json')
     with open(config_path, 'r') as config_fh:
         config = json.load(config_fh)
     return config
 
-def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,out_fname,by=None):
+def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,by=None):
     edges.columns = map(str.lower, edges.columns)
     if "id" in edges.columns.values.tolist():
         edges.rename(columns={"id": "e_id"}, inplace=True)
@@ -97,7 +97,4 @@ def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,out_fname,b
                                 inplace=True)
     network.nodes.rename(columns={'id':'node_id'},inplace=True)
     
-    # network.edges.to_file(out_fname, layer='edges', driver='GPKG')
-    # network.nodes.to_file(out_fname, layer='nodes', driver='GPKG')
-
     return network
