@@ -5,10 +5,30 @@ import sys
 import os
 import json
 import snkit
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 import fiona
 from shapely.geometry import shape, mapping
+from scipy.spatial import cKDTree
+
+def ckdnearest(gdA, gdB):
+    """Taken from https://gis.stackexchange.com/questions/222315/finding-nearest-point-in-other-geodataframe-using-geopandas
+    """
+    nA = np.array(list(gdA.geometry.apply(lambda x: (x.x, x.y))))
+    nB = np.array(list(gdB.geometry.apply(lambda x: (x.x, x.y))))
+    btree = cKDTree(nB)
+    dist, idx = btree.query(nA, k=1)
+    gdB_nearest = gdB.iloc[idx].drop(columns="geometry").reset_index(drop=True)
+    gdf = pd.concat(
+        [
+            gdA.reset_index(drop=True),
+            gdB_nearest,
+            pd.Series(dist, name='dist')
+        ], 
+        axis=1)
+
+    return gdf
 
 def gdf_geom_clip(gdf_in, clip_geom):
     """Filter a dataframe to contain only features within a clipping geometry
@@ -69,16 +89,16 @@ def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,by=None):
         network = snkit.network.snap_nodes(network)
         print ('* Done with snapping nodes to edges')
 
-        network.nodes = snkit.network.drop_duplicate_geometries(network.nodes)
-        print ('* Done with dropping same geometries')
+        # network.nodes = snkit.network.drop_duplicate_geometries(network.nodes)
+        # print ('* Done with dropping same geometries')
 
-        network = snkit.network.split_edges_at_nodes(network)
+        network = snkit.network.split_edges_at_nodes(network,tolerance=9e-10)
         print ('* Done with splitting edges at nodes')
 
     network = snkit.network.add_endpoints(network)   
     print ('* Done with adding endpoints')
 
-    network = snkit.network.split_edges_at_nodes(network)
+    network = snkit.network.split_edges_at_nodes(network,tolerance=9e-10)
     print ('* Done with splitting edges at nodes')
     
     network = snkit.network.add_ids(network, 
