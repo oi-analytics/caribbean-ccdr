@@ -7,6 +7,7 @@ import json
 import snkit
 import numpy as np
 import pandas as pd
+import igraph as ig
 import geopandas as gpd
 import fiona
 from shapely.geometry import shape, mapping
@@ -121,3 +122,57 @@ def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,by=None):
     network.nodes.rename(columns={'id':'node_id'},inplace=True)
     
     return network
+
+def network_od_path_estimations(graph,
+    source, target, cost_criteria):
+    """Estimate the paths, distances, times, and costs for given OD pair
+
+    Parameters
+    ---------
+    graph
+        igraph network structure
+    source
+        String/Float/Integer name of Origin node ID
+    source
+        String/Float/Integer name of Destination node ID
+    tonnage : float
+        value of tonnage
+    vehicle_weight : float
+        unit weight of vehicle
+    cost_criteria : str
+        name of generalised cost criteria to be used: min_gcost or max_gcost
+    time_criteria : str
+        name of time criteria to be used: min_time or max_time
+    fixed_cost : bool
+
+    Returns
+    -------
+    edge_path_list : list[list]
+        nested lists of Strings/Floats/Integers of edge ID's in routes
+    path_dist_list : list[float]
+        estimated distances of routes
+    path_time_list : list[float]
+        estimated times of routes
+    path_gcost_list : list[float]
+        estimated generalised costs of routes
+
+    """
+    paths = graph.get_shortest_paths(source, target, weights=cost_criteria, output="epath")
+
+
+    edge_path_list = []
+    path_gcost_list = []
+    # for p in range(len(paths)):
+    for path in paths:
+        edge_path = []
+        path_gcost = 0
+        if path:
+            for n in path:
+                edge_path.append(graph.es[n]['edge_id'])
+                path_gcost += graph.es[n][cost_criteria]
+
+        edge_path_list.append(edge_path)
+        path_gcost_list.append(path_gcost)
+
+    
+    return edge_path_list, path_gcost_list
