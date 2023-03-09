@@ -62,7 +62,7 @@ def new_edge_properties(new_edges,existing_edges,max_edge_id):
     # new_edges = gpd.GeoDataFrame(new_edges,geometry="geometry",crs=f"EPSG:{epsg}")
     return new_edges
 
-def add_new_edges(new_edges,existing_edges,existing_nodes,max_edge_id,epsg=32360):
+def add_new_edges(new_edges,existing_edges,existing_nodes,max_edge_id,epsg=32620):
     new_edges = pd.merge(new_edges,existing_nodes[["node_id","geometry"]],how="left",on=["node_id"])
     new_edges.rename(columns={"node_id":"to_node","geometry":"to_geometry"},inplace=True)
     new_edges["geometry"] = new_edges.progress_apply(lambda x:LineString([x.from_geometry,x.to_geometry]),axis=1)
