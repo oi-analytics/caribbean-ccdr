@@ -37,7 +37,7 @@ Style.__doc__ += """: class to hold an element's styles
 Used to generate legend entries, apply uniform style to groups of map elements
 """
 Palette = _get_palette()
-JAMAICA_GRID_EPSG = 3448
+CARIBBEAN_GRID_EPSG = 32620
 
 def within_extent(x, y, extent):
     """Test x, y coordinates against (xmin, xmax, ymin, ymax) extent
@@ -45,23 +45,20 @@ def within_extent(x, y, extent):
     xmin, xmax, ymin, ymax = extent
     return (xmin < x) and (x < xmax) and (ymin < y) and (y < ymax)
 
-# def get_axes(extent=None):
-#     """Get map axes
+def get_projection(extent=(-74.04, -52.90, -20.29, -57.38), epsg=None):
+    """Get map axes
 
-#     Parameters
-#     ----------
-#     extent, optional: tuple (x0, x1, y0, y1)
-#         to be provided in Jamaica grid coordinates
-#     """
-#     ax_proj = ccrs.epsg(JAMAICA_GRID_EPSG)
+    Default to Argentina extent // Lambert Conformal projection
+    """
+    if epsg is not None:
+        ax_proj = ccrs.epsg(epsg)
+    else:
+        x0, x1, y0, y1 = extent
+        cx = x0 + ((x1 - x0) / 2)
+        cy = y0 + ((y1 - y0) / 2)
+        ax_proj = ccrs.TransverseMercator(central_longitude=cx, central_latitude=cy)
 
-#     plt.figure(figsize=(12, 8), dpi=500)
-#     ax = plt.axes([0.025, 0.025, 0.95, 0.95], projection=ax_proj)
-#     if extent is not None:
-#         ax.set_extent(extent, crs=ax_proj)
-#     ax.patch.set_facecolor(Palette.BACKGROUND)
-
-#     return ax
+    return ax_proj
 
 def get_axes(ax,extent=None):
     """Get map axes
@@ -71,7 +68,7 @@ def get_axes(ax,extent=None):
     extent, optional: tuple (x0, x1, y0, y1)
         to be provided in Jamaica grid coordinates
     """
-    ax_proj = ccrs.epsg(JAMAICA_GRID_EPSG)
+    ax_proj = ccrs.epsg(CARIBBEAN_GRID_EPSG)
 
     # plt.figure(figsize=(12, 8), dpi=500)
     # ax = plt.axes([0.025, 0.025, 0.95, 0.95], projection=ax_proj)
@@ -81,7 +78,7 @@ def get_axes(ax,extent=None):
 
     return ax
 
-def scale_bar_and_direction(ax,arrow_location=(0.86,0.08),scalebar_location=(0.88,0.05),scalebar_distance=25,zorder=20):
+def scale_bar_and_direction(ax,arrow_location=(0.8,0.08),scalebar_location=(0.88,0.05),scalebar_distance=25,zorder=20):
     """Draw a scale bar and direction arrow
 
     Parameters
@@ -99,7 +96,7 @@ def scale_bar_and_direction(ax,arrow_location=(0.86,0.08),scalebar_location=(0.8
     # lat-lon limits
     scale_bar(ax, scalebar_location, scalebar_distance, color='k',zorder=zorder)
 
-    ax.text(*arrow_location,transform=ax.transAxes, s='N', fontsize=14,zorder=zorder)
+    ax.text(*arrow_location,transform=ax.transAxes, s='N', fontsize=12,zorder=zorder)
     arrow_location = numpy.asarray(arrow_location) + numpy.asarray((0.008,-0.03))
     # arrow_location[1] = arrow_location[1] - 0.02
     ax.arrow(*arrow_location, 0, 0.02, length_includes_head=True,
@@ -118,7 +115,7 @@ def plot_basemap_labels(ax,ax_crs=None,labels=None,label_column=None,label_offse
             text = getattr(label,label_column)
             x = float(label.geometry.centroid.x)
             y = float(label.geometry.centroid.y)
-            size = 8
+            size = 6
             if within_extent(x, y, extent):
                 ax.text(
                     x - 10*label_offset, y - 10*label_offset,
@@ -129,22 +126,21 @@ def plot_basemap_labels(ax,ax_crs=None,labels=None,label_column=None,label_offse
                     zorder = include_zorder,
                     transform=proj)
 
-def plot_basemap(ax, data_path, ax_crs=JAMAICA_GRID_EPSG, plot_regions=False, region_labels=False):
+def plot_basemap(ax, boundaries, regions, 
+                    ax_crs=CARIBBEAN_GRID_EPSG, 
+                    plot_regions=False, 
+                    region_labels=False):
     """Plot countries and regions background
     """
-    boundaries = os.path.join(data_path, 'boundaries', 'admin_boundaries.gpkg')
-    states = geopandas.read_file(boundaries, layer='admin0')#.to_crs(ax_crs)
-
-    states.plot(ax=ax, edgecolor=Palette.WHITE, facecolor=Palette.GREY_1, zorder=1)
+    boundaries.plot(ax=ax, edgecolor=Palette.WHITE, facecolor=Palette.GREY_1, zorder=1)
 
     if plot_regions:
-        regions = geopandas.read_file(boundaries, layer='admin1').to_crs(ax_crs)
         regions.plot(ax=ax, edgecolor=Palette.TRANSPARENT, facecolor=Palette.GREY_2)
         regions.plot(ax=ax, edgecolor=Palette.WHITE, facecolor=Palette.TRANSPARENT, zorder=2)
         if region_labels is True:
             plot_basemap_labels(ax,ax_crs=ax_crs,
-                                labels=regions,label_column='PARISH',label_offset=100)
-    # scale_bar_and_direction(ax,ax_crs,location=(0.75, 0.05))
+                                labels=regions,label_column='NAME_1',label_offset=100)
+    scale_bar_and_direction(ax,scalebar_distance=2)
 
 def plot_point_assets(ax,ax_crs,nodes,colors,size,marker,zorder):
     proj_lat_lon = ccrs.epsg(ax_crs)
@@ -171,17 +167,6 @@ def plot_line_assets(ax,ax_crs,edges,colors,size,zorder):
     )
     return ax
 
-def get_sector_layer(sector,sector_data_path,layer_key):
-    layer_name_key = f"{layer_key}_layer"
-    layer_classify_key = f"{layer_key}_classify_column"
-    layer_classify_values = f"{layer_key}_categories"
-    if sector[layer_name_key] is not None:
-        layer = geopandas.read_file(os.path.join(sector_data_path,sector["sector_gpkg"]),layer=sector[layer_name_key])
-        layer = layer[layer[sector[layer_classify_key]].isin(sector[layer_classify_values])]
-        return layer
-    else:
-        return []
-
 def plot_lines_and_points(ax,legend_handles,sector,sector_dataframe=None,layer_key=None,marker_size_factor=1):  
     layer_details = list(zip(sector[f"{layer_key}_categories"],
                                         sector[f"{layer_key}_categories_colors"],
@@ -190,7 +175,7 @@ def plot_lines_and_points(ax,legend_handles,sector,sector_dataframe=None,layer_k
     use_labels = []
     for i,(cat,color,label,zorder) in enumerate(layer_details):
         if layer_key == "edge":
-            ax = plot_line_assets(ax,JAMAICA_GRID_EPSG,
+            ax = plot_line_assets(ax,CARIBBEAN_GRID_EPSG,
                                 sector_dataframe[sector_dataframe[sector["edge_classify_column"]] == cat],
                                 color,
                                 marker_size_factor*sector["edge_categories_linewidth"][i],
@@ -200,7 +185,7 @@ def plot_lines_and_points(ax,legend_handles,sector,sector_dataframe=None,layer_k
                                                 label=label))
                 use_labels.append(label)
         elif layer_key == "node":
-            ax = plot_point_assets(ax,JAMAICA_GRID_EPSG,
+            ax = plot_point_assets(ax,CARIBBEAN_GRID_EPSG,
                             sector_dataframe[sector_dataframe[sector["node_classify_column"]] == cat],
                             color,
                             sector["node_categories_markersize"][i],
@@ -450,7 +435,7 @@ def line_map_plotting_colors_width(ax,df,column,
         cat_style = styles[cat]
         ax.add_geometries(
             geoms,
-            crs=ccrs.epsg(JAMAICA_GRID_EPSG),
+            crs=ccrs.epsg(CARIBBEAN_GRID_EPSG),
             linewidth=0.0,
             facecolor=cat_style.color,
             edgecolor='none',
@@ -564,7 +549,7 @@ def point_map_plotting_colors_width(ax,df,column,
             ax.scatter(
                 g[0].x,
                 g[0].y,
-                transform=ccrs.epsg(JAMAICA_GRID_EPSG),
+                transform=ccrs.epsg(CARIBBEAN_GRID_EPSG),
                 facecolor=cat_style.color,
                 s=g[1],
                 alpha=0.8,
@@ -585,7 +570,7 @@ def point_map_plotting_colors_width(ax,df,column,
     legend_from_style_spec(ax, styles,fontsize=legend_size,loc='lower left',zorder=20)
     return ax
 
-def jamaica_port_and_airport_node_labels(ax,nodes):
+def CARIBBEAN_port_and_airport_node_labels(ax,nodes):
 
     labels = nodes.drop_duplicates("name",keep = "first")
     used_names = []
@@ -653,7 +638,7 @@ def plot_raster(ax, tif_path, cmap='viridis', levels=None, colors=None,
 
 def test_plot(data_path, figures_path):
     plt.figure(figsize=(12, 8), dpi=500)
-    ax = plt.axes([0.025, 0.025, 0.95, 0.95], projection=ccrs.epsg(JAMAICA_GRID_EPSG))
+    ax = plt.axes([0.025, 0.025, 0.95, 0.95], projection=ccrs.epsg(CARIBBEAN_GRID_EPSG))
     ax = get_axes(ax,extent=(598251, 838079, 610353, 714779))
     plot_basemap(ax, data_path, plot_regions=True, region_labels=True)
     scale_bar_and_direction(ax,arrow_location=(0.86,0.08),scalebar_location=(0.88,0.05))
