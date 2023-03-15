@@ -1,8 +1,7 @@
-""" Assign different weights to road nodes in Africa, including HVT countries
-    These weights include:
-        Population to whole of Africa 
-        Mining areas to whole of Africa
-        Sector specific GDP allocations to HVT countries only
+""" Assign populations to road nodes in East Caribbean
+    This is done by creating Voronoi polygons around roads and intersecting with population rasters
+    If a Voronoi area has 0 population then we remove it and redo the process 
+    till we have non-zero population within each Voronoi polygon area
 """
 
 import os
