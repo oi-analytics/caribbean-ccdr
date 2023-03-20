@@ -13,6 +13,24 @@ import fiona
 from shapely.geometry import shape, mapping
 from scipy.spatial import cKDTree
 
+def components(edges,nodes,node_id_col):
+    G = networkx.Graph()
+    G.add_nodes_from(
+        (getattr(n, node_id_col), {"geometry": n.geometry}) for n in nodes.itertuples()
+    )
+    G.add_edges_from(
+        (e.from_node, e.to_node, {"edge_id": e.edge_id, "geometry": e.geometry})
+        for e in edges.itertuples()
+    )
+    components = networkx.connected_components(G)
+    for num, c in enumerate(components):
+        print(f"Component {num} has {len(c)} nodes")
+        edges.loc[(edges.from_node.isin(c) | edges.to_node.isin(c)), "component"] = num
+        nodes.loc[nodes[node_id_col].isin(c), "component"] = num
+
+    return edges, nodes
+
+
 def ckdnearest(gdA, gdB):
     """Taken from https://gis.stackexchange.com/questions/222315/finding-nearest-point-in-other-geodataframe-using-geopandas
     """
@@ -67,7 +85,7 @@ def load_config():
         config = json.load(config_fh)
     return config
 
-def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,by=None):
+def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,snap_distance=None,by=None):
     edges.columns = map(str.lower, edges.columns)
     if "id" in edges.columns.values.tolist():
         edges.rename(columns={"id": "e_id"}, inplace=True)
@@ -87,9 +105,12 @@ def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,by=None):
     print("* Done with splitting multilines")
 
     if nodes is not None:
-        network = snkit.network.snap_nodes(network)
-        print ('* Done with snapping nodes to edges')
-
+        if snap_distance is not None:
+            network = snkit.network.link_nodes_to_edges_within(network, snap_distance, tolerance=1e-09)
+            print ('* Done with joining nodes to edges')
+        else:
+            network = snkit.network.snap_nodes(network)
+            print ('* Done with snapping nodes to edges')
         # network.nodes = snkit.network.drop_duplicate_geometries(network.nodes)
         # print ('* Done with dropping same geometries')
 
