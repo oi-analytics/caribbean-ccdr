@@ -53,6 +53,7 @@ def get_traffic(G, cost, C, zeta, population="population", verbose=False):
         m_a = G.nodes[a][population]
         pred, costs = nx.shortest_paths.dijkstra_predecessor_and_distance(G, a, cutoff=C, weight=cost)
         mpt_nodes = [*pred.keys()]
+        print (mpt_nodes)
         
         def distribute_phi(b_j, phi):
                 """Distribute flux contribution recursively across predecessors."""
@@ -95,11 +96,11 @@ def test_get_traffic():
     for node in G.nodes:
         G.nodes[node]["population"] = 1
 
-#     pos = nx.spring_layout(G)
-#     nx.draw(G, with_labels=True)
+    # pos = nx.spring_layout(G)
+    # nx.draw(G, with_labels=True)
 
     G, fluxes = get_traffic(G, 1000, None, 1, verbose=False)
-
+    print (G.edges)
     assert fluxes[4, 5] == 1 / 12
     assert fluxes[5, 4] == 1 / 2
     assert fluxes[2, 1] == 1 / 6
@@ -116,3 +117,5 @@ def test_get_traffic():
     t_23 = fluxes[2,4] + fluxes[4, 2] + fluxes[2,5] + fluxes[5,2] + 0.5 * (fluxes[1,4] + fluxes[4,1] + fluxes[1,5] + fluxes[5,1] + fluxes[2, 3] + fluxes[3,2])
     assert np.isclose(t_23, G.edges[(2, 4)]['traffic'])
 
+if __name__ == '__main__':
+    test_get_traffic()
