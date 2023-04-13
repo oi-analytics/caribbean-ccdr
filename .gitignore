@@ -3,6 +3,8 @@
 *.gpkg
 data/*
 incoming_data/*
+figures/*
+processed_data/*
 .bak/*
 
 # Editor config
