@@ -1,78 +1,56 @@
 """Failure analysis of transport networks
 
 """
-import ast
-import copy
-import csv
-import itertools
-import math
-import operator
 import os
-import sys
+os.environ['USE_PYGEOS'] = '0'
 
-import igraph as ig
-import numpy as np
 import pandas as pd
-from analysis_utils import load_config
-from transport_flow_and_disruption_functions import *
+from geospatial_utils import load_config
+import transport_flow_and_disruption_functions as tfdf
 
 
-
-def main(config):
-    """Estimate failures
-    """
-    data_path, output_path = config['paths']['data'], config['paths']['output']
-
-    fail_output_path = os.path.join(output_path, 'failure_results')
-    if os.path.exists(fail_output_path) == False:
-        os.mkdir(fail_output_path)
-
-    network_data_path = os.path.join(data_path,"infrastructure/transport")
-    # Load network dataframe
-    print ('* Loading network GeoDataFrame')
-    gdf_edges = gpd.read_file(os.path.join(network_data_path,'roads.gpkg'),layer="edges")
+# global settings
+COUNTRY = 'LCA'
+COST = 'time_m'
+THRESH = 5
+ZETA = 1
+RECALCULATE_PATHS = False
+EDGE_ATTRS = ['edge_id', 'length_m', 'time_m']
+plot_kwargs = {'dpi': 400, 'bbox_inches': 'tight'}
 
 
-    # Load flow paths
-    print ('* Loading flow paths')
-    flow_df = pd.read_parquet(os.path.join(flow_paths_data))
+def main(CONFIG):
+    # set up directories
+    indir, outdir, figdir = CONFIG['paths']['incoming_data'], CONFIG['paths']['data'], CONFIG['paths']['figures']
 
-    # Read failure scenarios
-    print ('* Reading failure scenarios')
-    fail_df = pd.read_csv(os.path.join('path/to/failed/edges'))
-    print ('Number of failure scenarios',len(fail_df))
+    roads, road_net = tfdf.get_roads(os.path.join(outdir, 'infrastructure', 'transport'), COUNTRY, EDGE_ATTRS)
 
-    path_types = "edge_path"
-    cost_types = "time"
-    flow_types = "traffic"
+    # get path and flux dataframe and save
+    pathname = os.path.join(outdir, 'infrastructure', 'transport', f'{COUNTRY}_pathdata_{COST}_{THRESH}')
+    if RECALCULATE_PATHS:
+        path_df = tfdf.get_flux_data(road_net, COST, THRESH, ZETA)
+        path_df.to_parquet(path=f"{pathname}.parquet", index=True)
+        print(f"Paths data saved as {pathname}.parquet.")
+    else:
+        path_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
 
-    edge_path_idx = get_flow_paths_indexes_of_edges(flow_df,path_types)
-    print ('* Performing failure analysis')
-    ef_list = []
-    for f_edge in range(len(ef_sc_list)):
-        fail_edge = ef_sc_list[f_edge]
-        if isinstance(fail_edge,list) == False:
-            fail_edge = [fail_edge]
-        
-        ef_dict = igraph_scenario_edge_failures(
-                gdf_edges, fail_edge, flow_df,edge_path_idx,
-                path_types, 
-                cost_types,flow_types)
+    # add traffic to road edges
+    pathname = os.path.join(outdir, 'infrastructure', 'transport', f"{COUNTRY}_traffic_{COST}_{THRESH}")
+    traffic_df = tfdf.get_flow_on_edges(path_df, 'edge_id', 'edge_path', 'flux')
+    traffic_df = traffic_df.rename(columns={'flux': 'traffic'})
+    roads_traffic = roads.merge(traffic_df, how='left', on='edge_id')
+    tfdf.test_traffic_assignment(roads_traffic, roads)  # check number of edges unchanged
+    roads_traffic.to_file(filename=f"{pathname}.gpkg", driver="GPKG", layer="roads")
 
-        if ef_dict:
-            ef_list += ef_dict
+    # set up a simulated disruption
+    scenario_dict = tfdf.simulate_disruption(roads_traffic, seed=2)
+    path_df_disrupted = tfdf.model_disruption(scenario_dict, path_df, road_net, outdir, COUNTRY, COST, THRESH)
+    roads_disrupted = tfdf.get_traffic_disruption(path_df, path_df_disrupted, roads_traffic, scenario_dict, COST)
 
-        print(f"Done with scenario {f_edge} out of {len(ef_sc_list)}")
-    df = pd.DataFrame(ef_list)
-    print ('* Assembling failure results')
-    df["rerouting_loss_person_hr"] = (1 - df["no_access"])*(df[f"new_{cost_types}"] - df[{cost_types}])*df[flow_types]
-    df["traffic_loss_person"] = df["no_access"]*df[flow_types]
-    df = df.groupby(["fail_edges"])["rerouting_loss_person_hr","traffic_loss_person"].sum().reset_index()
-    # Should probbaly rename csv file below
-    df.to_csv(os.path.join(fail_output_path,"road_failure.csv"),index=False)
-
-
+    # plot some disrupted edges
+    fig = tfdf.plot_failed_edge_traffic(roads_disrupted, scenario_dict, edge_ix=2, buffer=100)
+    fig.savefig(os.path.join(figdir, f"{COUNTRY}_traffic_change_zoom_{scenario_dict['scenario_name']}_{COST}_{THRESH}.png"), **plot_kwargs)
 
 if __name__ == '__main__':
-    CONFIG = load_config()
+    CONFIG = load_config(os.path.join("..", "..", ".."))
     main(CONFIG)
