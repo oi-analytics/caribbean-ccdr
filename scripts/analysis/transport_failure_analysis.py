@@ -17,6 +17,7 @@ ZETA = 1
 RECALCULATE_PATHS = False
 EDGE_ATTRS = ['edge_id', 'length_m', 'time_m']
 plot_kwargs = {'dpi': 400, 'bbox_inches': 'tight'}
+caribbean_epsg = 32620
 
 
 def main(CONFIG):
@@ -44,7 +45,8 @@ def main(CONFIG):
 
     # set up a simulated disruption
     scenario_dict = tfdf.simulate_disruption(roads_traffic, seed=2)
-    path_df_disrupted = tfdf.model_disruption(scenario_dict, path_df, road_net, outdir, COUNTRY, COST, THRESH)
+    outfile = os.path.join(outdir, 'infrastructure', 'transport', f"{COUNTRY}_failure_aggregates_{COST}_{THRESH}.csv")
+    path_df_disrupted = tfdf.model_disruption(scenario_dict, path_df, road_net, outfile, COST)
     roads_disrupted = tfdf.get_traffic_disruption(path_df, path_df_disrupted, roads_traffic, scenario_dict, COST)
 
     # plot some disrupted edges

@@ -52,43 +52,43 @@ def get_roads(indir, country: str, edge_attrs: list):
     return roads, road_net
 
 
-def test_pop_assignment(road_net, buildings, renaming_dict):
+def test_pop_assignment(road_net, buildings, renaming_dict, capacity_str):
     """Test building population assignments to road network nodes worked."""
     renaming_dict_r = {value: key for key, value in renaming_dict.items()}
     for building in buildings.itertuples():
         if building.node_id in road_net.nodes:
-            assert road_net.nodes[building.node_id]['population'] == building.assigned_students
+            assert road_net.nodes[building.node_id]['population'] == getattr(building, capacity_str)
         else:
             print(f"Missing {building.node_id}, index: {(building.Index)}, road node: {renaming_dict_r[building.node_id]}")
 
-def test_plot(nodes_gdf, buildings, i=0):
+
+def test_plot(nodes_gdf, buildings, i=0, **plot_kwargs):
     """Plot school and nearest node to make sure assignments look sensible."""
     fig, ax = plt.subplots()
     building = buildings.iloc[i: i+1, :]
     
     nodes_gdf_clipped = nodes_gdf.clip(building.buffer(100))
-    nodes_gdf_clipped.plot(ax=ax)
-    nodes_gdf_clipped.set_index('node').loc[building['nearest_node'], :].plot(color='red', ax=ax)
+    nodes_gdf_clipped.plot(ax=ax, **plot_kwargs)
+    nodes_gdf_clipped.set_index('node').loc[building['nearest_node'], :].plot(color='red', ax=ax, **plot_kwargs)
     building.plot(ax=ax)
     ax.set_title(f"{building['node_id'].values[0]}: {building['nearest_node'].values[0]}")
-    
+
+
 def plot_district_traffic(roads, buildings, district, district_label, population_label):
     """Plot the traffic in a district"""
     fig, ax = plt.subplots(figsize=(10, 5))
 
-    assert roads.crs == buildings.crs, "must have same coordinate reference system"
-    orig_crs = roads.crs
-
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
-        roads[roads[district_label] == district].plot('traffic', cmap='Spectral_r', ax=ax, legend=True)
+        roads[roads[district_label] == district].to_crs(4326).plot('traffic', cmap='Spectral_r', ax=ax, legend=True)
         district_buildings = buildings[buildings[district_label] == district].copy()
-        district_buildings.set_geometry(district_buildings.to_crs(3857).buffer(500).to_crs(orig_crs)).plot(population_label, cmap='Reds', ax=ax, alpha=0.2, zorder=0)
-        district_buildings.plot(population_label, cmap='Reds', edgecolor='black', ax=ax, legend=True)
+        district_buildings.set_geometry(district_buildings.to_crs(32620).buffer(500)).to_crs(4326).plot(population_label, cmap='Reds', ax=ax, alpha=0.2, zorder=0)
+        district_buildings.to_crs(4326).plot(population_label, cmap='Reds', edgecolor='black', ax=ax, legend=True)
 
-    ax.set_title(f'Traffic in District {district}');
+    ax.set_title(f'Traffic in District {district}')
     return fig
-    
+
+
 def test_traffic_assignment(roads_traffic, roads):
     assert len(roads) == len(roads_traffic), 'no road edges should be deleted after assigning traffic'
 
@@ -99,6 +99,7 @@ def simulate_disruption(roads, num_disrupted=10, scenario_name='dummy_scenario',
     edge_fail_tuples = [(o, d) for o, d in zip(failed_edges['from_node'], failed_edges['to_node'])]
     edge_fail_ids = [edge_id for edge_id in failed_edges['edge_id']]
     return {"scenario_name": scenario_name, "edge_fail_tuples": edge_fail_tuples, "edge_fail_ids": edge_fail_ids}
+
 
 def print_disruption_info(road_net, road_net_disrupted, edge_flow_path_indices, edge_fail_ids):
     """Compare number of connected components between disrupted and not-disrupted road networks."""
@@ -116,7 +117,7 @@ def print_disruption_info(road_net, road_net_disrupted, edge_flow_path_indices, 
     print(f"Sizes: {connected_subgraphs[:3]} ... etc.")
     
     
-def model_disruption(scenario_dict, paths_df, road_net, outdir,  COUNTRY, COST, C):
+def model_disruption(scenario_dict, paths_df, road_net, outfile, COST):
     """Model disruption changes to paths"""
     
     # unpack scenario dict
@@ -135,18 +136,18 @@ def model_disruption(scenario_dict, paths_df, road_net, outdir,  COUNTRY, COST, 
     edge_fail_dict = igraph_scenario_edge_failures(road_net_df, edge_fail_ids,
     paths_df, edge_flow_path_indices, 'edge_path', COST, 'flux')
 
-    path_df_disrupted = pd.DataFrame(edge_fail_dict)
-    path_df_disrupted[f"rerouting_loss_person_{COST}"] = (1 - path_df_disrupted["no_access"]) * (path_df_disrupted[f"new_{COST}"] - path_df_disrupted[COST]) * path_df_disrupted['flux']
-    path_df_disrupted["lost_flux"] = path_df_disrupted["no_access"] * path_df_disrupted['flux']
-    path_df_disrupted["rerouted_flux"] = (1 - path_df_disrupted["no_access"]) * path_df_disrupted['flux']
-    path_df_disrupted['failed_edges'] = path_df_disrupted['failed_edges'].astype(str)
-    aggregated_disruption = path_df_disrupted.groupby(['failed_edges'])[[f"rerouting_loss_person_{COST}", "lost_flux", "rerouted_flux"]].sum().reset_index()
-    aggregated_disruption['scenario_name'] = scenario_name
-    # Should probbaly rename csv file below
-    outpath = join(outdir, f"{COUNTRY}_failure_aggregates_{COST}_{C}.csv")
-    aggregated_disruption.to_csv(outpath, index=False)
-    print(f"\nSaved disruption file to {outpath}.")
-    return path_df_disrupted
+    if edge_fail_dict:
+        path_df_disrupted = pd.DataFrame(edge_fail_dict)
+        path_df_disrupted[f"rerouting_loss_person_{COST}"] = (1 - path_df_disrupted["no_access"]) * (path_df_disrupted[f"new_{COST}"] - path_df_disrupted[COST]) * path_df_disrupted['flux']
+        path_df_disrupted["lost_flux"] = path_df_disrupted["no_access"] * path_df_disrupted['flux']
+        path_df_disrupted["rerouted_flux"] = (1 - path_df_disrupted["no_access"]) * path_df_disrupted['flux']
+        path_df_disrupted['failed_edges'] = path_df_disrupted['failed_edges'].astype(str)
+        aggregated_disruption = path_df_disrupted.groupby(['failed_edges'])[[f"rerouting_loss_person_{COST}", "lost_flux", "rerouted_flux"]].sum().reset_index()
+        aggregated_disruption['scenario_name'] = scenario_name
+        
+        aggregated_disruption.to_csv(outfile, index=False)
+        print(f"\nSaved disruption file to {outfile}.")
+        return path_df_disrupted
 
 
 def get_traffic_disruption(path_df_orig, path_df_disrupted, roads_traffic_orig, scenario_dict, COST):
@@ -174,7 +175,7 @@ def get_traffic_disruption(path_df_orig, path_df_disrupted, roads_traffic_orig, 
 
 
 def plot_failed_edge_traffic(roads_disrupted, scenario_dict, edge_ix=0, buffer=100, cmap_kwargs={'cmap': 'Spectral_r'}):
-    crs = roads_disrupted.crs
+    plt.ticklabel_format(axis='both', style='plain')
     scenario_name = scenario_dict['scenario_name']
     failed_edge = scenario_dict['edge_fail_ids'][edge_ix]
 
@@ -183,18 +184,21 @@ def plot_failed_edge_traffic(roads_disrupted, scenario_dict, edge_ix=0, buffer=1
         # getting an annoying runtime warning when geometries don't intersect
         warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-        failed_edge = roads_disrupted.set_index('edge_id').loc[[failed_edge]]
-        buffer_geom = failed_edge.to_crs(3587).buffer(buffer).to_crs(crs).geometry
-        roads_disrupted.clip(buffer_geom).plot('traffic', ax=axs[0], **cmap_kwargs, vmin=-100, vmax=100)
+        # highlight failed edge and clip to vicinity
+        failed_edge = roads_disrupted.set_index('edge_id').loc[[failed_edge]].to_crs(4326)
+        failed_edge_buffer = failed_edge.to_crs(32620).buffer(buffer).to_crs(4326)
+        buffer_geom = failed_edge.to_crs(32620).buffer(buffer).geometry
+        roads_clipped = roads_disrupted.to_crs(32620).clip(buffer_geom).to_crs(4326)
 
-        failed_edge.to_crs(3587).buffer(1).to_crs(crs).plot(color='red', alpha=0.6, ax=axs[0])
+        # plot
+        roads_clipped.plot('traffic', ax=axs[0], **cmap_kwargs, vmin=-100, vmax=100)
+        failed_edge_buffer.plot(color='red', alpha=0.4, ax=axs[0])
         failed_edge.plot(color='red', ax=axs[0])
-
-        roads_disrupted.clip(buffer_geom).plot(f'traffic_{scenario_name}', ax=axs[1], **cmap_kwargs, vmin=-100, vmax=100, legend=True)
+        roads_clipped.plot(f'traffic_{scenario_name}', ax=axs[1], **cmap_kwargs, vmin=-100, vmax=100, legend=True)
 
         # plot change
-        delta_std = roads_disrupted.clip(buffer_geom)[f'delta_traffic_{scenario_name}'].std()
-        roads_disrupted.clip(buffer_geom).plot(f'delta_traffic_{scenario_name}', ax=axs[2], **cmap_kwargs, vmin=-3*delta_std, vmax=3*delta_std, legend=True)
+        delta_std = roads_clipped[f'delta_traffic_{scenario_name}'].std()
+        roads_clipped.plot(f'delta_traffic_{scenario_name}', ax=axs[2], **cmap_kwargs, vmin=-3*delta_std, vmax=3*delta_std, legend=True)
 
     # set titles
     axs[0].set_title('original traffic')
@@ -366,9 +370,7 @@ def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
     edge_fail_dictionary = []
     edge_path_index = list(set(list(chain.from_iterable([path_idx for edge, path_idx in edge_flow_path_indexes.items() if edge in edge_failure_set]))))
 
-
     if edge_path_index:
-        
         select_flows = flow_dataframe[flow_dataframe.index.isin(edge_path_index)].copy()
         del edge_path_index
         network_graph = ig.Graph.TupleList(network_df_in[~network_df_in['edge_id'].isin(edge_failure_set)].itertuples(
@@ -413,7 +415,6 @@ def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
                 po_access.loc[:, 'access'] = 1
                 access_flows.append(po_access[['origin_id','destination_id','access']])
             del po_access
-
         del A
 
         if len(access_flows):
@@ -436,5 +437,8 @@ def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
                                             'no_access': 1})
 
         del no_access, select_flows
+        return edge_fail_dictionary
+    else:
+        warnings.warn("No paths affected by failed edges", RuntimeWarning)
 
-    return edge_fail_dictionary
+    

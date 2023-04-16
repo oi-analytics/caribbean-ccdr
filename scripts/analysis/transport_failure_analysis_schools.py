@@ -78,7 +78,7 @@ def main(CONFIG):
         nx.set_node_attributes(road_net_dist, school_classes, name="class")
         
         # some tests here
-        tfdf.test_pop_assignment(road_net_dist, nearest_nodes, rename_schools)
+        tfdf.test_pop_assignment(road_net_dist, nearest_nodes, rename_schools, 'assigned_students')
         # test_plot(nodes_gdf, nearest_nodes)
 
         # get path and flux data
@@ -110,7 +110,8 @@ def main(CONFIG):
         
     # set up simulated disruption
     scenario_dict = tfdf.simulate_disruption(roads_traffic, seed=2)
-    path_df_disrupted = tfdf.model_disruption(scenario_dict, paths_df, school_road_net, outdir, COUNTRY, COST, THRESH)
+    outfile = os.path.join(outdir, 'infrastructure', 'transport', f"{COUNTRY}_school_failure_aggregates_{COST}_{THRESH}.csv")
+    path_df_disrupted = tfdf.model_disruption(scenario_dict, paths_df, road_net, outfile, COST)
     roads_disrupted = tfdf.get_traffic_disruption(paths_df, path_df_disrupted, roads_traffic, scenario_dict, COST)
 
     # plot changes to traffic
