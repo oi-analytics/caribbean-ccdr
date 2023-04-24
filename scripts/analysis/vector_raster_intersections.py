@@ -110,8 +110,8 @@ def read_transforms(hazards, data_path):
     transform_id = 0
     hazard_transforms = []
     for hazard in hazards.itertuples():
-        hazard_path = hazard.path
-        with rasterio.open(os.path.join(data_path, hazard_path)) as dataset:
+        hazard_fname = hazard.fname
+        with rasterio.open(os.path.join(data_path, hazard_fname)) as dataset:
             crs = dataset.crs
             width = dataset.width
             height = dataset.height
@@ -154,7 +154,7 @@ def process_nodes(nodes, transforms, hazard_transforms, data_path):
     # associate hazard values
     for hazard in hazard_transforms.itertuples():
         logging.info("Hazard %s transform %s", hazard.key, hazard.transform_id)
-        fname = os.path.join(data_path, hazard.path)
+        fname = os.path.join(data_path, hazard.fname)
         cell_index_col = f'cell_index_{hazard.transform_id}'
         associate_raster(nodes, hazard.key, fname, cell_index_col)
 
@@ -191,7 +191,7 @@ def process_edges(edges, transforms, hazard_transforms, data_path):
     # associate hazard values
     for hazard in hazard_transforms.itertuples():
         logging.info("Hazard %s transform %s", hazard.key, hazard.transform_id)
-        fname = os.path.join(data_path, hazard.path)
+        fname = os.path.join(data_path, hazard.fname)
         cell_index_col = f'cell_index_{hazard.transform_id}'
         associate_raster(edges, hazard.key, fname, cell_index_col)
 
@@ -239,7 +239,7 @@ def process_areas(areas, transforms, hazard_transforms, data_path):
     # associate hazard values
     for hazard in hazard_transforms.itertuples():
         logging.info("Hazard %s transform %s", hazard.key, hazard.transform_id)
-        fname = os.path.join(data_path, hazard.path)
+        fname = os.path.join(data_path, hazard.fname)
         cell_index_col = f'cell_index_{hazard.transform_id}'
         associate_raster(areas, hazard.key, fname, cell_index_col)
 
