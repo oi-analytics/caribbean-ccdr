@@ -71,7 +71,7 @@ def main(config):
                     os.path.join(processed_data_path,"data_layers",f"{country.lower()}_layers.csv"))
         
         """Run the intersections of asset vector layers with the hazard raster grid layers
-            This done by calling the script road_raster_intersections.py, which is adapted from:
+            This done by calling the script vector_raster_intersections.py, which is adapted from:
                 https://github.com/nismod/east-africa-transport/blob/main/scripts/exposure/split_networks.py
             The result of this script will give us a geoparquet file with hazard values over geometries of vectors   
         """
@@ -82,8 +82,6 @@ def main(config):
             hazard_csv = os.path.join(processed_data_path,"hazards",f"{hazard}_{country.lower()}.csv")
 
             run_intersections = True  # Set to True is you want to run this process
-            # Did a run earlier and it takes ~ 224 minutes (nearly 4 hours) to run for the whole of Africa!
-            # And generated a geoparquet with > 24 million rows! 
             if run_intersections is True:
                 args = [
                         "python",

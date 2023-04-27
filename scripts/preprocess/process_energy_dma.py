@@ -106,7 +106,7 @@ def main(config):
 
     plants_substations = gpd.read_file(os.path.join(incoming_data_path,"dominica_electricalnet","electricPS.shp"))
     plants_substations.columns = map(str.lower, plants_substations.columns)
-    plants_substations.rename(columns={"type":"asset_type"},inplace=True)
+    plants_substations.rename(columns={"type":"asset_type","cap_mw":"capacity_mw"},inplace=True)
     plants_substations = plants_substations.explode(index_parts=False)
     plants_substations = plants_substations.to_crs(epsg=32620)
 

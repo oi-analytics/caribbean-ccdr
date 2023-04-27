@@ -188,19 +188,19 @@ def main(config):
     nodes = network_degree(edges,nodes,"node_id")
     
     plants_substations["node_id"] = [f"elecn_{max_node_id + 1 + x}" for x in plants_substations.index.values]
-    plants_substations["supply_capacity_MW"] = 0
-    plants_substations["supply_capacity_GWH"] = 0
-    plants_substations.loc[plants_substations["asset_type"]=="diesel","supply_capacity_MW"] = 88.4
-    plants_substations.loc[plants_substations["asset_type"]=="diesel","supply_capacity_GWH"] = 88.4*1000*24*365*0.79/1000000.0
+    plants_substations["capacity_mw"] = 0
+    plants_substations["capacity_gwh"] = 0
+    plants_substations.loc[plants_substations["asset_type"]=="diesel","capacity_mw"] = 88.4
+    plants_substations.loc[plants_substations["asset_type"]=="diesel","capacity_gwh"] = 88.4*1000*24*365*0.79/1000000.0
     solar_area_total = sum(plants_substations[plants_substations["asset_type"]=="solar"]["geometry"].area)
     plants_substations.loc[
         plants_substations["asset_type"]=="solar",
-        "supply_capacity_MW"] = 3.0*(plants_substations.loc[
+        "capacity_mw"] = 3.0*(plants_substations.loc[
                             plants_substations["asset_type"]=="solar",
                             "geometry"].area)/solar_area_total
     plants_substations.loc[
         plants_substations["asset_type"]=="solar",
-        "supply_capacity_GWH"] = 7.0*(plants_substations.loc[
+        "capacity_gwh"] = 7.0*(plants_substations.loc[
                             plants_substations["asset_type"]=="solar",
                             "geometry"].area)/solar_area_total 
 
