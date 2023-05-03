@@ -33,42 +33,34 @@ def main(config):
     if os.path.exists(intersection_results_path) == False:
         os.mkdir(intersection_results_path) 
 
-    countries = ["DMA","GRD","LCA","VCT"]
-    data_details = pd.read_csv(os.path.join(
-                        processed_data_path,
-                        "data_layers",
-                        "infrastructure_layers.csv"))
+    # countries = ["DMA","GRD","LCA","VCT"]
+    # data_details = pd.read_csv(os.path.join(
+    #                     processed_data_path,
+    #                     "data_layers",
+    #                     "infrastructure_layers.csv"))
+    countries = ["dma","grd","lca","vct"]
+    # countries = ["dma"]
+    sectors = {
+                "transport":["roads","ports","airports"],
+                "energy":["energy"],
+                "water":["wtp","wwtp"],
+                "social":["education","health"]
+            }
     for country in countries:
         paths = []
-        country_files = data_details[data_details["iso_code"] == country]
-        for r in country_files.itertuples():
-            paths.append(os.path.join("infrastructure",r.sector,r.gpkg))
-
-        country_files = data_details[data_details["iso_code"] == "ALL"]
-        for r in country_files.itertuples():       
-            data_df = gpd.read_file(
-                            os.path.join(
-                                processed_data_path,
-                                "infrastructure",
-                                r.sector,
-                                r.gpkg),
-                            layer=r.layer
-                    )
-
-            # Read the data for each country
-            data_df = data_df[data_df["iso_code"] == country]
-            data_df.to_file(os.path.join(
-                                processed_data_path,
-                                "infrastructure",
-                                r.sector,
-                                f"{country.lower()}_{r.gpkg}"),
-                            layer=r.layer,driver="GPKG"
-                    )
-            paths.append(os.path.join("infrastructure",r.sector,f"{country.lower()}_{r.gpkg}")) 
+        for sector,subsectors in sectors.items():
+            for subsector in subsectors:
+                read_gpkg = os.path.join(
+                                    processed_data_path,
+                                    "infrastructure",
+                                    sector,
+                                    f"{country}_{subsector}.gpkg")
+                if os.path.isfile(read_gpkg):
+                    paths.append(os.path.join("infrastructure",sector,f"{country}_{subsector}.gpkg"))
 
         # Write the voronoi file path to a csv file
         write_to_file(paths,
-                    os.path.join(processed_data_path,"data_layers",f"{country.lower()}_layers.csv"))
+                    os.path.join(processed_data_path,"data_layers",f"{country}_layers.csv"))
         
         """Run the intersections of asset vector layers with the hazard raster grid layers
             This done by calling the script vector_raster_intersections.py, which is adapted from:
@@ -76,10 +68,10 @@ def main(config):
             The result of this script will give us a geoparquet file with hazard values over geometries of vectors   
         """
 
-        infra_details_csv = os.path.join(processed_data_path,"data_layers",f"{country.lower()}_layers.csv")
-        hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial"]
+        infra_details_csv = os.path.join(processed_data_path,"data_layers",f"{country}_layers.csv")
+        hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","chaz_cyclones"]
         for hazard in hazards:
-            hazard_csv = os.path.join(processed_data_path,"hazards",f"{hazard}_{country.lower()}.csv")
+            hazard_csv = os.path.join(processed_data_path,"hazards",f"{hazard}_{country}.csv")
 
             run_intersections = True  # Set to True is you want to run this process
             if run_intersections is True:

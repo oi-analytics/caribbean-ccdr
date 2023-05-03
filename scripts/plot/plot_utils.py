@@ -19,6 +19,7 @@ from shapely.geometry import LineString
 from matplotlib.lines import Line2D
 from scalebar import scale_bar
 import jenkspy
+import fiona
 
 def _get_palette():
     colors = {
@@ -167,40 +168,128 @@ def plot_line_assets(ax,ax_crs,edges,colors,size,zorder):
     )
     return ax
 
-def plot_lines_and_points(ax,legend_handles,sector,sector_dataframe=None,layer_key=None,marker_size_factor=1):  
+def plot_lines_and_points(ax,legend_handles,sector,sector_dataframe=None,layer_key=None,marker_size_factor=1.0):  
     layer_details = list(zip(sector[f"{layer_key}_categories"],
                                         sector[f"{layer_key}_categories_colors"],
                                         sector[f"{layer_key}_categories_labels"],
                                         sector[f"{layer_key}_categories_zorder"]))
     use_labels = []
     for i,(cat,color,label,zorder) in enumerate(layer_details):
-        if layer_key == "edge":
-            ax = plot_line_assets(ax,CARIBBEAN_GRID_EPSG,
-                                sector_dataframe[sector_dataframe[sector["edge_classify_column"]] == cat],
+        df = sector_dataframe[sector_dataframe[sector[f"{layer_key}_classify_column"]] == cat]
+        if len(df.index) > 0:
+            if layer_key == "nodes":
+                ax = plot_point_assets(ax,CARIBBEAN_GRID_EPSG,
+                                df,
                                 color,
-                                marker_size_factor*sector["edge_categories_linewidth"][i],
+                                sector["nodes_categories_markersize"][i],
+                                sector["nodes_categories_marker"][i],
                                 zorder)
-            if label not in use_labels:
-                legend_handles.append(mpatches.Patch(color=color,
-                                                label=label))
-                use_labels.append(label)
-        elif layer_key == "node":
-            ax = plot_point_assets(ax,CARIBBEAN_GRID_EPSG,
-                            sector_dataframe[sector_dataframe[sector["node_classify_column"]] == cat],
-                            color,
-                            sector["node_categories_markersize"][i],
-                            sector["node_categories_marker"][i],
-                            zorder)
-            if label not in use_labels:
-                legend_handles.append(plt.plot([],[],
-                                        marker=sector["node_categories_marker"][i], 
-                                        ms=marker_size_factor*sector["node_categories_markersize"][i], 
-                                        ls="",
-                                        color=color,
-                                        label=label)[0])
-                use_labels.append(label)
-        
+                if label not in use_labels:
+                    legend_handles.append(plt.plot([],[],
+                                            marker=sector["nodes_categories_marker"][i], 
+                                            ms=marker_size_factor*sector["nodes_categories_markersize"][i], 
+                                            ls="",
+                                            color=color,
+                                            label=label)[0])
+                    use_labels.append(label)
+            else:
+                ax = plot_line_assets(ax,CARIBBEAN_GRID_EPSG,
+                                    df,
+                                    color,
+                                    marker_size_factor*sector[f"{layer_key}_categories_linewidth"][i],
+                                    zorder)
+                if label not in use_labels:
+                    legend_handles.append(mpatches.Patch(color=color,
+                                                    label=label))
+                    use_labels.append(label)
+
     return ax, legend_handles
+
+def add_labels(ax,label_df,label_column):
+    for v in label_df.itertuples():
+        text = getattr(v,label_column)
+        if "port" not in text.lower() and "terminal" not in text.lower() and "airport"  not in text.lower():
+            text = text + " Port"
+        location_x = v.geometry.centroid.x + 1.0e2
+        location_y = v.geometry.centroid.y + 1.0e2
+        if text == "Douglas–Charles Airport":
+            location_x = location_x - 5.0e3
+            location_y = location_y + 5.0e2
+        elif text == "Maurice Bishop International Airport":
+            # location_x = location_x - 5.0e3
+            location_y = location_y + 5.0e2
+        elif text == "Pearls Airport":
+            # location_x = location_x - 5.0e3
+            location_y = location_y + 5.0e2
+        elif text == "Hewanorra International Airport":
+            location_x = location_x - 5.0e3
+            location_y = location_y + 5.0e2
+        elif text == "George F. L. Charles Airport":
+            # location_x = location_x - 5.0e3
+            location_y = location_y + 5.0e2
+        elif text == "Argyle International Airport":
+            location_x = location_x - 2.0e4
+            location_y = location_y + 5.0e2
+        elif text == "Mustique Airport":
+            location_x = location_x - 5.0e3
+            location_y = location_y + 5.0e2
+        elif text == "St. George's Cargo Port":
+            # location_x = location_x - 5.0e3
+            location_y = location_y - 1.0e3
+        elif text == "Vieux Fort Port":
+            location_x = location_x - 2.0e3
+            location_y = location_y + 5.0e2
+        elif text == "Castries Ferry Terminal":
+            location_x = location_x - 8.0e3
+            location_y = location_y - 1.0e3
+        elif text == "Castries Cargo Port":
+            location_x = location_x + 5.0e2
+            location_y = location_y - 5.0e2
+        elif text == "Kingstown Passenger Port":
+            location_x = location_x - 8.0e3
+            location_y = location_y - 2.0e3
+        elif text == "Kingstown Cargo Port":
+            location_x = location_x - 3.0e3
+            location_y = location_y + 5.0e2
+
+        ax.text(location_x,location_y,text,size=6,weight="bold")
+
+    return ax
+
+def get_sector_layer(country,sector,sector_data_path):
+    sector_layers = []
+    read_gpkg = os.path.join(
+                                os.path.join
+                                (
+                                sector_data_path,
+                                f"{country}_{sector['sector_gpkg']}"
+                                )
+                            )
+    if os.path.isfile(read_gpkg):
+        layers = fiona.listlayers(read_gpkg)
+        for layer in layers:
+            layer_classify_key = f"{layer}_classify_column"
+            layer_classify_values = f"{layer}_categories"
+            layer_df = geopandas.read_file(os.path.join(read_gpkg),layer=layer)
+            if sector["sector_label"] != "Roads":
+                layer_df = layer_df[layer_df[sector[layer_classify_key]].isin(sector[layer_classify_values])]
+            else:
+                layer_crs = layer_df.crs
+                road_classes = layer_df[layer_df[sector[layer_classify_key]].isin(sector[layer_classify_values])]
+                other_roads = layer_df[~layer_df[sector[layer_classify_key]].isin(sector[layer_classify_values])]
+                other_roads[sector[layer_classify_key]] = "other"
+                layer_df = geopandas.GeoDataFrame(
+                                pandas.concat(
+                                        [road_classes,other_roads],
+                                        axis=0,
+                                        ignore_index=True
+                                        ),
+                                geometry="geometry",crs=layer_crs)
+                # print (layer_df)
+            sector_layers.append((layer_df,layer))
+        
+    return sector_layers
+
 
 def legend_from_style_spec(ax, styles, fontsize = 10, loc='lower left',zorder=20):
     """Plot legend

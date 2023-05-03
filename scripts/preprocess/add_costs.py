@@ -51,9 +51,9 @@ def add_road_costs(road_df,cost_df,cost_type="rehab"):
                     axis=0,
                     ignore_index=True
                 )
-    df[f"{cost_type}_cost_min"] = df["lanes"]*df[f"{cost_type}_cost_min"]
-    df[f"{cost_type}_cost_max"] = df["lanes"]*df[f"{cost_type}_cost_max"]
-    df[f"{cost_type}_cost_unit"] = "US$/km"
+    df[f"{cost_type}_cost_min"] = 0.001*df["lanes"]*df[f"{cost_type}_cost_min"]
+    df[f"{cost_type}_cost_max"] = 0.001*df["lanes"]*df[f"{cost_type}_cost_max"]
+    df[f"{cost_type}_cost_unit"] = "US$/m"
 
     return gpd.GeoDataFrame(df,geometry="geometry",crs=road_crs)
 

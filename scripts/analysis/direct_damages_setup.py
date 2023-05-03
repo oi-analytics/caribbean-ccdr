@@ -11,45 +11,19 @@ import numpy as np
 import risk_and_adaptation_functions as rad
 from tqdm import tqdm
 tqdm.pandas()
-
+CARIBBEAN_CRS = 32620
 
 def main():
     config = rad.load_config()
     processed_data_path = config['paths']['data']
-    outputs_path = config['paths']['output']
-    epsg_china = 3857
-    asset_path = os.path.join(outputs_path,'hazard_asset_intersection') # Path where the asset flood intersections and cost details are stored
-    output_path = os.path.join(outputs_path,'risk_and_adaptation_results')
-    adaptation_data_path = os.path.join(processed_data_path,"adaptation_costs")
-    if os.path.exists(output_path) == False:
-        os.mkdir(output_path)
+    output_data_path = config['paths']['output']
+    # Path where the hazard-asset intersections results are stored
+    intersection_path = os.path.join(outputs_path,'hazard_asset_intersection')
+    results_path = os.path.join(outputs_path,'risk_and_adaptation_results')
+    if os.path.exists(results_path) == False:
+        os.mkdir(results_path)
 
     climate_idx_cols = ['hazard', 'model','rcp', 'epoch'] # The climate columns
-    flood_protection_types = [(None,None),('Y',None)]
-    flood_return_periods = [2,5,10,25,50,100,250,500,1000]
-
-    start_year = 2020
-    end_year = 2080
-    growth_rates = pd.read_excel(os.path.join(processed_data_path,'economic_data',
-                                'growth_forecast_OECD.xlsx'),
-                                sheet_name='China_forecast').fillna(0)
-    growth_year_rates = []
-    growth_rates_times = list(sorted(growth_rates.TIME.values.tolist()))
-    # And create parameter values
-    for y in range(start_year,end_year+1):
-        if y in growth_rates_times:
-            growth_year_rates.append((y,growth_rates.loc[growth_rates.TIME == y,'Growth'].values[0]))
-        elif y < growth_rates_times[0]:
-            growth_year_rates.append((y,growth_rates.loc[growth_rates.TIME == growth_rates_times[0],'Growth'].values[0]))
-        elif y > growth_rates_times[-1]:
-            growth_year_rates.append((y,growth_rates.loc[growth_rates.TIME == growth_rates_times[-1],'Growth'].values[0]))
-
-    hazard_data_details = pd.read_csv(os.path.join(processed_data_path,
-                                    "hazard_layers.csv"),encoding="latin1")
-    hazard_keys = hazard_data_details["key"].values.tolist()
-    protection_vals = hazard_data_details[hazard_data_details["rcp"] == "baseline"]
-    protection_rps_cols = list(zip(protection_vals.rp.values.tolist(),protection_vals.key.values.tolist()))
-
     network_csv = os.path.join(processed_data_path,
                             "network_layers_hazard_intersections_details_0.csv")
     sector_attributes = pd.read_csv(network_csv)

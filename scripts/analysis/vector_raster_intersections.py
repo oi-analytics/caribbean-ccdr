@@ -31,68 +31,69 @@ def load_config():
 def main(data_path, networks_csv, hazards_csv,output_path):
     # read transforms, record with hazards
     hazards = pandas.read_csv(hazards_csv)
-    hazard_slug = os.path.basename(hazards_csv).replace(".csv", "")
-    hazard_transforms, transforms = read_transforms(hazards, data_path)
-    hazard_transforms.to_csv(hazards_csv.replace(".csv", "__with_transforms.csv"), index=False)
+    if len(hazards.index) > 0:
+        hazard_slug = os.path.basename(hazards_csv).replace(".csv", "")
+        hazard_transforms, transforms = read_transforms(hazards, data_path)
+        hazard_transforms.to_csv(hazards_csv.replace(".csv", "__with_transforms.csv"), index=False)
 
-    # read networks
-    networks = pandas.read_csv(networks_csv)
+        # read networks
+        networks = pandas.read_csv(networks_csv)
 
-    for network_path in networks.path:
-        fname = os.path.join(data_path, network_path)
-        out_fname = os.path.join(
-            output_path,
-            os.path.basename(network_path).replace(".gpkg", f"_splits__{hazard_slug}.gpkg")
-        )
-        pq_fname_nodes = out_fname.replace(".gpkg","__nodes.geoparquet")
-        pq_fname_edges = out_fname.replace(".gpkg","__edges.geoparquet")
-        pq_fname_areas = out_fname.replace(".gpkg","__areas.geoparquet")
+        for network_path in networks.path:
+            fname = os.path.join(data_path, network_path)
+            out_fname = os.path.join(
+                output_path,
+                os.path.basename(network_path).replace(".gpkg", f"_splits__{hazard_slug}.gpkg")
+            )
+            pq_fname_nodes = out_fname.replace(".gpkg","__nodes.geoparquet")
+            pq_fname_edges = out_fname.replace(".gpkg","__edges.geoparquet")
+            pq_fname_areas = out_fname.replace(".gpkg","__areas.geoparquet")
 
-        # skip if output is there already (not using gpkg currently)
-        # if os.path.exists(out_fname):
-        #     logging.info("Skipping %s. Already exists: %s", os.path.basename(fname), out_fname)
-        #     continue
+            # skip if output is there already (not using gpkg currently)
+            # if os.path.exists(out_fname):
+            #     logging.info("Skipping %s. Already exists: %s", os.path.basename(fname), out_fname)
+            #     continue
 
-        logging.info("Processing %s", os.path.basename(fname))
-        layers = fiona.listlayers(fname)
-        logging.info("Layers: %s", layers)
+            logging.info("Processing %s", os.path.basename(fname))
+            layers = fiona.listlayers(fname)
+            logging.info("Layers: %s", layers)
 
-        if "nodes" in layers:
-            # skip if output is there already
-            if os.path.exists(pq_fname_nodes):
-                logging.info("Skipping %s. Already exists: %s", os.path.basename(fname), pq_fname_nodes)
-            else:
-                # look up nodes cell index
-                nodes = geopandas.read_file(fname, layer="nodes")
-                logging.info("Node CRS %s", nodes.crs)
-                nodes = process_nodes(nodes, transforms, hazard_transforms, data_path)
-                # nodes.to_file(out_fname, driver="GPKG", layer="nodes")
-                nodes.to_parquet(pq_fname_nodes)
+            if "nodes" in layers:
+                # skip if output is there already
+                if os.path.exists(pq_fname_nodes):
+                    logging.info("Skipping %s. Already exists: %s", os.path.basename(fname), pq_fname_nodes)
+                else:
+                    # look up nodes cell index
+                    nodes = geopandas.read_file(fname, layer="nodes")
+                    logging.info("Node CRS %s", nodes.crs)
+                    nodes = process_nodes(nodes, transforms, hazard_transforms, data_path)
+                    # nodes.to_file(out_fname, driver="GPKG", layer="nodes")
+                    nodes.to_parquet(pq_fname_nodes)
 
-        if "edges" in layers:
-            # skip if output is there already
-            if os.path.exists(pq_fname_edges):
-                logging.info("Skipping %s. Already exists: %s", os.path.basename(fname), pq_fname_edges)
-            else:
-                # split lines
-                edges = geopandas.read_file(fname, layer="edges")
-                logging.info("Edge CRS %s", edges.crs)
-                edges = process_edges(edges, transforms, hazard_transforms, data_path)
-                # edges.to_file(out_fname, driver="GPKG", layer="edges")
-                edges.to_parquet(pq_fname_edges)
+            if "edges" in layers:
+                # skip if output is there already
+                if os.path.exists(pq_fname_edges):
+                    logging.info("Skipping %s. Already exists: %s", os.path.basename(fname), pq_fname_edges)
+                else:
+                    # split lines
+                    edges = geopandas.read_file(fname, layer="edges")
+                    logging.info("Edge CRS %s", edges.crs)
+                    edges = process_edges(edges, transforms, hazard_transforms, data_path)
+                    # edges.to_file(out_fname, driver="GPKG", layer="edges")
+                    edges.to_parquet(pq_fname_edges)
 
-        if "areas" in layers:
-            # skip if output is there already
-            if os.path.exists(pq_fname_areas):
-                logging.info("Skipping %s. Already exists: %s", os.path.basename(fname), pq_fname_areas)
-            else:
-                # split polygons
-                areas = geopandas.read_file(fname, layer="areas")
-                logging.info("Area CRS %s", areas.crs)
-                areas = explode_multi(areas)
-                areas = process_areas(areas, transforms, hazard_transforms, data_path)
-                # areas.to_file(out_fname, driver="GPKG", layer="areas")
-                areas.to_parquet(pq_fname_areas)
+            if "areas" in layers:
+                # skip if output is there already
+                if os.path.exists(pq_fname_areas):
+                    logging.info("Skipping %s. Already exists: %s", os.path.basename(fname), pq_fname_areas)
+                else:
+                    # split polygons
+                    areas = geopandas.read_file(fname, layer="areas")
+                    logging.info("Area CRS %s", areas.crs)
+                    areas = explode_multi(areas)
+                    areas = process_areas(areas, transforms, hazard_transforms, data_path)
+                    # areas.to_file(out_fname, driver="GPKG", layer="areas")
+                    areas.to_parquet(pq_fname_areas)
 
 
 # Helper class to store a raster transform and CRS

@@ -44,6 +44,8 @@ def main(config):
                                 "water_data",
                                 "grd_water.gpkg"))
     grd_df = grd_df.to_crs(epsg=caribbean_crs)
+    grd_df["node_id"] = grd_df.index.values.tolist()
+    grd_df["node_id"] = grd_df.progress_apply(lambda x:f"GRD_wtp_{x.node_id}",axis=1)
     grd_df["asset_type"] = "wtp"
     grd_df["capacity_m3d"] = grd_df["capacity_mgd"]*3785.0
     grd_df.to_file(os.path.join(processed_data_path,
