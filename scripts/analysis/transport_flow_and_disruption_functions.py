@@ -14,8 +14,21 @@ import igraph as ig
 from collections import defaultdict
 from itertools import chain
 import matplotlib.pyplot as plt
+from functools import wraps
+import time
 from tqdm import tqdm
 import warnings
+
+def timeit(func):
+    @wraps(func)
+    def timeit_wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        print(f'\nFunction {func.__name__}{args} kwargs: {kwargs} Took {total_time:.4f} seconds.\n')
+        return result
+    return timeit_wrapper
 
 
 # load roads network
@@ -98,14 +111,13 @@ def simulate_disruption(roads, num_disrupted=10, scenario_name='dummy_scenario',
     failed_edges = roads.sample(num_disrupted, axis=0, random_state=seed)
     edge_fail_tuples = [(o, d) for o, d in zip(failed_edges['from_node'], failed_edges['to_node'])]
     edge_fail_ids = [edge_id for edge_id in failed_edges['edge_id']]
-    return {"scenario_name": scenario_name, "edge_fail_tuples": edge_fail_tuples, "edge_fail_ids": edge_fail_ids}
+    return {"scenario_name": scenario_name, "scenario_year": 2020, "edge_fail_tuples": edge_fail_tuples, "edge_fail_ids": edge_fail_ids}
 
 
 def print_disruption_info(road_net, road_net_disrupted, edge_flow_path_indices, edge_fail_ids):
     """Compare number of connected components between disrupted and not-disrupted road networks."""
     
     print(f"Number of paths affected: {sum([len(paths) for edge, paths in edge_flow_path_indices.items() if edge in edge_fail_ids])}")
-    
     print("\nOriginal network:\n--------------")
     connected_subgraphs = [len(c) for c in sorted(nx.connected_components(road_net), key=len, reverse=True)]
     print(f"Number of disconnected subgraphs {len(connected_subgraphs)}")
@@ -116,39 +128,6 @@ def print_disruption_info(road_net, road_net_disrupted, edge_flow_path_indices, 
     print(f"Number of disconnected subgraphs {len(connected_subgraphs)}")
     print(f"Sizes: {connected_subgraphs[:3]} ... etc.")
     
-    
-def model_disruption(scenario_dict, paths_df, road_net, outfile, COST):
-    """Model disruption changes to paths"""
-    
-    # unpack scenario dict
-    scenario_name = scenario_dict["scenario_name"]
-    edge_fail_tuples = scenario_dict["edge_fail_tuples"]
-    edge_fail_ids = scenario_dict["edge_fail_ids"]
-    
-    edge_flow_path_indices = get_flow_paths_indexes_of_edges(paths_df, 'edge_path')
-    
-    road_net_disrupted = road_net.copy()
-    road_net_disrupted.remove_edges_from(edge_fail_tuples)
-    road_net_df = nx.to_pandas_edgelist(road_net)
-
-    print_disruption_info(road_net, road_net_disrupted, edge_flow_path_indices, edge_fail_ids)
-    
-    edge_fail_dict = igraph_scenario_edge_failures(road_net_df, edge_fail_ids,
-    paths_df, edge_flow_path_indices, 'edge_path', COST, 'flux')
-
-    if edge_fail_dict:
-        path_df_disrupted = pd.DataFrame(edge_fail_dict)
-        path_df_disrupted[f"rerouting_loss_person_{COST}"] = (1 - path_df_disrupted["no_access"]) * (path_df_disrupted[f"new_{COST}"] - path_df_disrupted[COST]) * path_df_disrupted['flux']
-        path_df_disrupted["lost_flux"] = path_df_disrupted["no_access"] * path_df_disrupted['flux']
-        path_df_disrupted["rerouted_flux"] = (1 - path_df_disrupted["no_access"]) * path_df_disrupted['flux']
-        path_df_disrupted['failed_edges'] = path_df_disrupted['failed_edges'].astype(str)
-        aggregated_disruption = path_df_disrupted.groupby(['failed_edges'])[[f"rerouting_loss_person_{COST}", "lost_flux", "rerouted_flux"]].sum().reset_index()
-        aggregated_disruption['scenario_name'] = scenario_name
-        
-        aggregated_disruption.to_csv(outfile, index=False)
-        print(f"\nSaved disruption file to {outfile}.")
-        return path_df_disrupted
-
 
 def get_traffic_disruption(path_df_orig, path_df_disrupted, roads_traffic_orig, scenario_dict, COST):
     """Model traffic change from rerouting in disruption scenario."""
@@ -213,7 +192,8 @@ def plot_failed_edge_traffic(roads_disrupted, scenario_dict, edge_ix=0, buffer=1
         
     return fig
 
-def get_flux_data(G, cost, C, zeta, population="population", pop_thresh=5, origin_class=None, dest_class=None, class_str=''):
+@timeit
+def get_flux_data(G, cost, C, zeta, other_costs = [], population="population", pop_thresh=5, origin_class=None, dest_class=None, class_str=''):
     """
     TODO: replace nx.shortest_paths.single_source_dijkstra with a function that allows a list of targets.
     
@@ -230,7 +210,7 @@ def get_flux_data(G, cost, C, zeta, population="population", pop_thresh=5, origi
     fluxes = {}
     paths = {}
     costs = {}
-    
+    other_costs = {other_cost: {} for other_cost in other_costs}
 
     for a in (pbar := tqdm(G.nodes, desc='processing paths from source nodes', total=G.number_of_nodes())):
         if G.nodes[a].get(class_str) == origin_class:
@@ -254,11 +234,16 @@ def get_flux_data(G, cost, C, zeta, population="population", pop_thresh=5, origi
                             fluxes[(a, b)] = {'flux': phi_ab}
                             paths[(a, b)] = {'edge_path': path_eids}
                             costs[(a, b)] = {cost: c_ab}
-            
-    flux_df = pd.DataFrame.from_dict(fluxes, orient='index')
+
+                            # calculate any extra costs
+                            for other_cost, other_cost_dict in other_costs.items():
+                                other_cost_dict[(a, b)] = nx.path_weight(G, path_ab, other_cost)
+    
     path_df = pd.DataFrame.from_dict(paths, orient='index')
     cost_df = pd.DataFrame.from_dict(costs, orient='index')
-    df = pd.concat([path_df, cost_df, flux_df], axis=1).reset_index()
+    cost_other_df = pd.DataFrame.from_dict(other_costs, orient="columns")
+    flux_df = pd.DataFrame.from_dict(fluxes, orient='index')
+    df = pd.concat([path_df, cost_df, cost_other_df, flux_df], axis=1).reset_index()
     df = df.rename(columns={'level_0': 'origin_id', 'level_1': 'destination_id'})
     return df
 
@@ -339,9 +324,73 @@ def get_flow_paths_indexes_of_edges(flow_dataframe, path_string):
     return edge_path_index
 
 
+def get_disruption_stats(disruption_df, path_df, road_net, COST):
+        all_fail_lists = disruption_df[['asset_set_amin', 'asset_set_mean', 'asset_set_amax']].to_numpy().flatten()     # get all damaged road combinations
+        all_fail_lists = [np.array(x, dtype='object') for x in set(tuple(x) for x in all_fail_lists if x is not None)]  # reduce to all unique lists of damaged edges
+
+        # simulate each disruption
+        first_loop = 0
+        for fail_list in (pbar:=tqdm(all_fail_lists)):
+            pbar.set_description(f"Processing {len(all_fail_lists)} edge failure sets.")
+            result = model_disruption(fail_list, path_df, road_net, COST)
+            if result is not None:
+                path_df_disrupted, aggregated_disruption = result[0], result[1]
+                # all dataframe indices where this failure combo occurs
+                min_idx = disruption_df[disruption_df['asset_set_amin'].apply(lambda x: str(x) == str(fail_list))].index
+                mean_idx = disruption_df[disruption_df['asset_set_mean'].apply(lambda x: str(x) == str(fail_list))].index
+                max_idx = disruption_df[disruption_df['asset_set_amax'].apply(lambda x: str(x) == str(fail_list))].index
+                # assign results to correct rows and columns
+                for column in aggregated_disruption.columns:
+                    if first_loop: # set up columns, probs not the most elegant way to do this
+                        disruption_df[f'{column}_amin'] = [0.] * len(disruption_df)
+                        disruption_df[f'{column}_mean'] = [0.] * len(disruption_df)
+                        disruption_df[f'{column}_amax'] = [0.] * len(disruption_df)
+                        first_run = False
+                    value = aggregated_disruption[column].iloc[0]
+                    disruption_df.loc[min_idx, f'{column}_amin'] = value
+                    disruption_df.loc[mean_idx, f'{column}_mean'] = value
+                    disruption_df.loc[max_idx, f'{column}_amax'] = value
+        return disruption_df
+
+
+# @timeit
+def model_disruption(edge_fail_ids, paths_df, road_net, COST, other_costs=[]):
+    """Model disruption changes to paths for a list of failed edges.
+    
+    TODO: calculate new costs for other (non primary) costs too
+    """
+    
+    edge_flow_path_indices = get_flow_paths_indexes_of_edges(paths_df, 'edge_path')
+    road_net_df = nx.to_pandas_edgelist(road_net)
+    edge_fail_dict = igraph_scenario_edge_failures(road_net_df, edge_fail_ids, paths_df,
+                                                   edge_flow_path_indices, 'edge_path',
+                                                   COST, 'flux')
+
+    if edge_fail_dict:
+        path_df_disrupted = pd.DataFrame(edge_fail_dict)
+        path_df_disrupted['failed_edges'] = path_df_disrupted['failed_edges'].astype(str)
+        path_df_disrupted["lost_flux"] = path_df_disrupted["no_access"] * path_df_disrupted['flux']
+        path_df_disrupted["rerouted_flux"] = (1 - path_df_disrupted["no_access"]) * path_df_disrupted['flux']
+        path_df_disrupted[f'delta_{COST}'] = (1 - path_df_disrupted["no_access"]) * (path_df_disrupted[f"new_{COST}"] - path_df_disrupted[COST])
+        path_df_disrupted[f'perc_delta_{COST}'] = (1 - path_df_disrupted["no_access"]) * (path_df_disrupted[f"new_{COST}"] - path_df_disrupted[COST]) / path_df_disrupted[COST]
+        path_df_disrupted[f"rerouting_loss_person_{COST}"] = (path_df_disrupted[f'delta_{COST}']) * path_df_disrupted['flux']
+        
+        agg_kwargs= {
+                    "trips_lost": ("lost_flux", sum),                                           # total #trips lost
+                    "%trips_lost": ("no_access", np.mean),                                      # % of trips lost, TODO: sanity check this
+                    f"{COST}_delta": (f"delta_{COST}", sum),                                    # total increase in COST
+                    f"%{COST}_delta": (f'perc_delta_{COST}', np.mean),                          # average % increase in COST
+                    f"rerouting_loss_person_{COST}": (f"rerouting_loss_person_{COST}", sum)     # total person hours (or whatever COST is)
+                    }
+        
+        aggregated_disruption = path_df_disrupted.groupby(['failed_edges'])[["lost_flux", "no_access", f"delta_{COST}", f"perc_delta_{COST}", f"rerouting_loss_person_{COST}"]].agg(**agg_kwargs)
+        return path_df_disrupted, aggregated_disruption
+
+
+
 def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
-    flow_dataframe, edge_flow_path_indexes, path_criteria,
-    cost_criteria, flow_column):
+                                  flow_dataframe, edge_flow_path_indexes,
+                                  path_criteria, cost_criteria, flow_column):
     """Estimate network impacts of each failures
     When the tariff costs of each path are fixed by vehicle weight
 
@@ -376,32 +425,36 @@ def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
         network_graph = ig.Graph.TupleList(network_df_in[~network_df_in['edge_id'].isin(edge_failure_set)].itertuples(
             index=False), edge_attrs=list(network_df_in.columns)[2:])
 
-        A = sorted(network_graph.connected_components().subgraphs(),key=lambda l:len(l.es['edge_id']),reverse=True)
+        A = sorted(network_graph.connected_components().subgraphs(), key=lambda l:len(l.es['edge_id']),reverse=True)
         access_flows = []
         edge_fail_dictionary = []
+
         for i in range(len(A)):
             network_graph = A[i]
+            igraph_labels = {node_label: igraph_label for node_label, igraph_label in zip(network_graph.vs['name'], range(len(network_graph.vs['name'])))}
+
             nodes_name = np.asarray([x['name'] for x in network_graph.vs])
             po_access = select_flows[(select_flows['origin_id'].isin(nodes_name)) & (
                     select_flows['destination_id'].isin(nodes_name))]
-
 
             if len(po_access.index) > 0:
                 po_access = po_access.set_index('origin_id')
                 origins = list(set(po_access.index.values.tolist()))
                 for o in range(len(origins)):
                     origin = origins[o]
+
                     destinations = po_access.loc[[origin], 'destination_id'].values.tolist()
                     costs = po_access.loc[[origin], cost_criteria].values.tolist()
                     flows = po_access.loc[[origin], flow_column].values.tolist()
                     for destination, cost, flow in zip(destinations, costs, flows):
-                        paths = network_graph.get_shortest_paths(origin, destination, weights=cost_criteria, output="epath")
+
+                        paths = network_graph.get_shortest_paths(igraph_labels[origin], igraph_labels[destination], weights=cost_criteria, output="epath")
                         assert len(paths) == 1, f"{len(paths)} shortest paths found. Code only works for 1."
                         path = paths[0]
                         new_cost = sum(network_graph.es[edge][cost_criteria] for edge in path)
                         new_path = [network_graph.es[edge]['edge_id'] for edge in path]
 
-                        edge_fail_dictionary.append({'failed_edges': edge_failure_set,
+                        edge_fail_dictionary.append({'failed_edges': [edge_failure_set],
                                                      'origin_id': origin, 
                                                     'destination_id': destination,
                                                     "new_path": new_path,
@@ -427,7 +480,7 @@ def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
         no_access = select_flows[select_flows['access'] == 0].copy()
         if len(no_access.index) > 0:
             for value in no_access.itertuples():
-                edge_fail_dictionary.append({'failed_edges': edge_failure_set,
+                edge_fail_dictionary.append({'failed_edges': [edge_failure_set],
                                              'origin_id': getattr(value,'origin_id'),
                                             'destination_id': getattr(value,'destination_id'),
                                             cost_criteria: getattr(value, cost_criteria),

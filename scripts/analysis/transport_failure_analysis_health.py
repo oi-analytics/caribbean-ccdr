@@ -16,7 +16,7 @@ import transport_flow_and_disruption_functions as tfdf
 # global settings
 COUNTRY = 'LCA'
 COST = 'time_m'
-THRESH = 30
+THRESH = 60
 ZETA = 1
 RECALCULATE_PATHS = True
 EDGE_ATTRS = ['edge_id', 'length_m', 'time_m']
