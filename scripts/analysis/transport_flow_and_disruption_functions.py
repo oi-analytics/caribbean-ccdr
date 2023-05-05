@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import networkx as nx
+from shapely.geometry import Point
 from collections import defaultdict
 import igraph as ig
 from collections import defaultdict
@@ -18,6 +19,8 @@ from functools import wraps
 import time
 from tqdm import tqdm
 import warnings
+from analysis_utils import get_nearest_values
+
 
 def timeit(func):
     @wraps(func)
@@ -101,6 +104,95 @@ def plot_district_traffic(roads, buildings, district, district_label, population
     ax.set_title(f'Traffic in District {district}')
     return fig
 
+
+def process_school_fluxes(roads, road_net, schools, admin_areas, datadir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS):
+
+        # divide road dataframe into intra-admin area roads
+        roads_by_district = gpd.sjoin(roads, admin_areas, how="inner", predicate='within').reset_index(drop=True).drop('index_right', axis=1)
+
+        paths_df = []
+        road_nets = []
+        pathname = os.path.join(datadir, 'infrastructure', 'transport', f'{COUNTRY}_schools_pathdata_{COST}_{THRESH}')
+
+        # process road network and recalculate paths (if RECALCULATE_PATHS)
+        for district in [*roads_by_district['school_district'].unique()]:
+            # subset geodataframes to district
+            roads_district = roads_by_district[roads_by_district['school_district'] == district].copy()
+            road_net_dist = road_net.edge_subgraph([(u, v) for u, v in zip(roads_district['from_node'], roads_district['to_node'])])
+            schools_district = schools[schools['school_district'] == district].copy()
+
+            # get all node geometries
+            node_geoms = {node: Point(line.coords[-1]) for node, line in zip(roads_district['to_node'], roads_district['geometry'])}
+            node_geoms = node_geoms | {node: Point(line.coords[0]) for node, line in zip(roads_district['from_node'], roads_district['geometry']) if node not in node_geoms.keys()}
+            nodes_gdf = gpd.GeoDataFrame.from_dict(node_geoms, orient='index').reset_index().rename(columns={'index': 'node', 0: 'geometry'}).set_geometry('geometry')
+            
+            # find nearest nodes to each school building
+            schools_district.loc[:, 'nearest_node'] = schools_district.apply(lambda row: get_nearest_values(row, nodes_gdf, 'node'), axis=1)
+            aggfunc = {'node_id': lambda x : '_and_'.join(x), 'assigned_students': sum}
+            nearest_nodes = schools_district[['nearest_node', 'node_id', 'assigned_students']].groupby('nearest_node').agg(aggfunc).reset_index()
+            
+            # replace nodes with schools in road network
+            rename_schools = {node_id: school_id for node_id, school_id in zip(nearest_nodes['nearest_node'], nearest_nodes['node_id'])}
+            school_pops = {school_id: school_pop for school_id, school_pop in zip(nearest_nodes['node_id'], nearest_nodes['assigned_students'])}
+            school_classes = {school_id: "school" for school_id in nearest_nodes['node_id']}
+            road_net_dist = nx.relabel_nodes(road_net_dist, rename_schools, copy=True)
+            nx.set_node_attributes(road_net_dist, school_pops, name="population")
+            nx.set_node_attributes(road_net_dist, "domestic", name="class")
+            nx.set_node_attributes(road_net_dist, school_classes, name="class")
+            
+            # some tests here
+            test_pop_assignment(road_net_dist, nearest_nodes, rename_schools, 'assigned_students')
+            # test_plot(nodes_gdf, nearest_nodes)
+
+            # get path and flux data
+            if RECALCULATE_PATHS:
+                path_df = get_flux_data(road_net_dist, COST, THRESH, ZETA, origin_class='domestic', dest_class='school', class_str='class')
+                path_df.loc[:, 'school_district'] = district
+                paths_df.append(path_df)
+
+            road_nets.append(road_net)
+
+        # get path data and subdivided road network
+        if RECALCULATE_PATHS:
+            pd.concat(paths_df).to_parquet(path=f"{pathname}.parquet", index=True)
+        else:
+            paths_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
+        school_road_net = nx.compose_all(road_nets)
+
+        return paths_df, school_road_net, roads_by_district
+
+def process_health_fluxes(roads, road_net, health, datadir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS):
+    # get all node geometries
+    node_geoms = {node: Point(line.coords[-1]) for node, line in zip(roads['to_node'], roads['geometry'])}
+    node_geoms = node_geoms | {node: Point(line.coords[0]) for node, line in zip(roads['from_node'], roads['geometry']) if node not in node_geoms.keys()}
+    nodes_gdf = gpd.GeoDataFrame.from_dict(node_geoms, orient='index').reset_index().rename(columns={'index': 'node', 0: 'geometry'}).set_geometry('geometry')
+
+    # find nearest nodes to each school building
+    health['nearest_node'] = health.apply(lambda row: get_nearest_values(row, nodes_gdf, 'node'), axis=1)
+    aggfunc = {'node_id': lambda x : '_and_'.join(x), 'capacity': sum}
+    nearest_nodes = health[['nearest_node', 'node_id', 'capacity']].groupby('nearest_node').agg(aggfunc).reset_index()
+    # tfdf.test_plot(nodes_gdf, health, **{'aspect': 1})
+
+    # replace nodes with health in road network
+    rename_health = {node_id: hospital_id for node_id, hospital_id in zip(nearest_nodes['nearest_node'], nearest_nodes['node_id'])}
+    hospital_pops = {hospital_id: hospital_pop for hospital_id, hospital_pop in zip(nearest_nodes['node_id'], nearest_nodes['capacity'])}
+    hospital_classes = {hospital_id: "hospital" for hospital_id in nearest_nodes['node_id']}
+    road_net = nx.relabel_nodes(road_net, rename_health, copy=True)
+    nx.set_node_attributes(road_net, hospital_pops, name="population")
+    nx.set_node_attributes(road_net, "domestic", name="class")
+    nx.set_node_attributes(road_net, hospital_classes, name="class")
+    test_pop_assignment(road_net, nearest_nodes, rename_health, 'capacity')
+
+    # get path and flux dataframe and save
+    pathname = os.path.join(datadir, 'infrastructure', 'transport', f'{COUNTRY}_health_pathdata_{COST}_{THRESH}')
+    if RECALCULATE_PATHS:
+        paths_df = get_flux_data(road_net, COST, THRESH, ZETA, origin_class='domestic', dest_class='hospital', class_str='class')
+        paths_df.to_parquet(path=f"{pathname}.parquet", index=True)
+        print(f"Paths data saved as {pathname}.parquet.")
+    else:
+        paths_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
+
+    return paths_df, road_net
 
 def test_traffic_assignment(roads_traffic, roads):
     assert len(roads) == len(roads_traffic), 'no road edges should be deleted after assigning traffic'
@@ -345,7 +437,7 @@ def get_disruption_stats(disruption_df, path_df, road_net, COST):
                         disruption_df[f'{column}_amin'] = [0.] * len(disruption_df)
                         disruption_df[f'{column}_mean'] = [0.] * len(disruption_df)
                         disruption_df[f'{column}_amax'] = [0.] * len(disruption_df)
-                        first_run = False
+                        first_loop = False
                     value = aggregated_disruption[column].iloc[0]
                     disruption_df.loc[min_idx, f'{column}_amin'] = value
                     disruption_df.loc[mean_idx, f'{column}_mean'] = value

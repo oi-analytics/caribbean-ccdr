@@ -39,11 +39,10 @@ def main(CONFIG):
 
 
     # step 2: model disruption
-    outfile = os.path.join(datadir, 'infrastructure', 'transport', f"{COUNTRY}_failure_aggregates_{COST}_{THRESH}.csv")
+    outfile = os.path.join(datadir, "infrastructure", "transport", f"{COUNTRY.lower()}_roads_edges_sector_damages_with_roads")
     disruption_file = os.path.join(datadir, "infrastructure", "transport", f"{COUNTRY.lower()}_roads_edges_sector_damages.parquet")
     disruption_df = pd.read_parquet(disruption_file)
     disruption_df = tfdf.get_disruption_stats(disruption_df, path_df, road_net, COST)
-    outfile = os.path.join(datadir, "infrastructure", "transport", f"{COUNTRY.lower()}_roads_edges_sector_damages_with_roads")
     disruption_df.head(10).to_csv(f"{outfile}.csv")
     disruption_df.to_parquet(f"{outfile}.parquet")
 
