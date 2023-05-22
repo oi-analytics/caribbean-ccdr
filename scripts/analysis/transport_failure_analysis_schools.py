@@ -1,4 +1,13 @@
-"""Plot traffic and rerouting for each school district."""
+"""Plot traffic and rerouting for each school district.
+
+Timings:
+--------
+Truncating paths with threshold 99%.
+Number of paths before: 106,060.
+Number of paths after: 14,008.
+Took 31.2875 seconds.
+
+"""
 import os
 os.environ['USE_PYGEOS'] = '0'
 from os.path import join
@@ -14,6 +23,7 @@ import transport_flow_and_disruption_functions as tfdf
 # global settings
 COST = 'time_m'
 THRESH = 60
+TRUNC_THRESH = .99
 ZETA = 1
 EDGE_ATTRS = ['edge_id', 'length_m', 'time_m']
 RECALCULATE_PATHS = False
@@ -25,7 +35,7 @@ caribbean_epsg = 32620
 
 def main(CONFIG):
     # set up directories
-    indir, datadir, figdir = CONFIG['paths']['incoming_data'], CONFIG['paths']['data'], CONFIG['paths']['figures']
+    datadir, resultsdir, figdir = CONFIG['paths']['data'], CONFIG['paths']['results'], CONFIG['paths']['figures']
 
     # load roads, roads network, and schools
     roads, road_net = tfdf.get_roads(join(datadir, 'infrastructure', 'transport'), COUNTRY, ['edge_id', 'length_m', 'time_m'])
@@ -42,11 +52,15 @@ def main(CONFIG):
     admin_areas.loc[:, "school_district"] = admin_areas["school_district"].astype(str).str.replace("Saint","St.")
 
     # step 1: get path and flux dataframe and save
-    path_df, school_road_net, roads_by_district = tfdf.process_school_fluxes(roads, road_net, schools, admin_areas, datadir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS)
+    path_df, school_road_net, roads_by_district = tfdf.process_school_fluxes(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS)
+    # path_df.describe()  # max time to get to any school: 40.79 mins, min: 0 mins
+
+    # step 1(b): truncate disruption to remove smallest fluxes
+    path_df, *_ = tfdf.truncate_by_threshold(path_df, threshold=TRUNC_THRESH)
 
     # step 2: model disruption
-    outfile = os.path.join(datadir, "infrastructure", "transport", f"{COUNTRY.lower()}_schools_roads_edges_sector_damages_with_roads")
-    disruption_file = os.path.join(datadir, "infrastructure", "transport", f"{COUNTRY.lower()}_roads_edges_sector_damages.parquet")
+    outfile = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_schools_roads_edges_sector_damages_with_roads")
+    disruption_file = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_roads_edges_sector_damages.parquet")
     disruption_df = pd.read_parquet(disruption_file)
     disruption_df = tfdf.get_disruption_stats(disruption_df, path_df, school_road_net, COST)
     disruption_df.head(10).to_csv(f"{outfile}.csv")
@@ -54,7 +68,7 @@ def main(CONFIG):
 
     # step 3: add traffic to road edges
     if RECALCULATE_TRAFFIC:
-        pathname = os.path.join(datadir, 'infrastructure', 'transport', f"{COUNTRY}_schools_traffic_{COST}_{THRESH}")
+        pathname = os.path.join(resultsdir, 'transport', 'traffic', f"{COUNTRY}_schools_traffic_{COST}_{THRESH}")
         traffic_df = tfdf.get_flow_on_edges(path_df, 'edge_id', 'edge_path', 'flux')
         traffic_df = traffic_df.rename(columns={'flux': 'traffic'})
         roads_traffic = roads_by_district.merge(traffic_df, how='left', on='edge_id')

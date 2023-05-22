@@ -37,18 +37,19 @@ except:
 def get_dummy_roads():
     """Return a simplistic road network for testing."""
     dummy_roads = pd.DataFrame(columns=['from_node', 'to_node', 'from_pop', 'to_pop', 'time_m'])
-    dummy_roads['from_node'] = [1, 1, 2, 4, 5]
-    dummy_roads['to_node'] =  [2, 4, 3, 5, 3]
+    dummy_roads['from_node'] = ['1', '1', '2', '4', '5']
+    dummy_roads['to_node'] =  ['2', '4', '3', '5', '3']
     dummy_roads['from_pop'] = [10, 10, 0, 0, 0]
     dummy_roads['to_pop'] = [0, 0, 10, 0, 10]
     dummy_roads['time_m'] = [1, 2, 1, 2, 2]
     dummy_roads['edge_id'] = ['e1', 'e2', 'e3', 'e4', 'e5']
     dummy_road_net = nx.convert_matrix.from_pandas_edgelist(dummy_roads, source='from_node', target='to_node', edge_attr=['edge_id', 'time_m'])
-    dummy_road_net.nodes[1]['population'] = 10
-    dummy_road_net.nodes[2]['population'] = 0
-    dummy_road_net.nodes[3]['population'] = 10
-    dummy_road_net.nodes[4]['population'] = 0
-    dummy_road_net.nodes[5]['population'] = 0
+    dummy_road_net.nodes['1']['population'] = 10
+    dummy_road_net.nodes['2']['population'] = 0
+    dummy_road_net.nodes['3']['population'] = 10
+    dummy_road_net.nodes['4']['population'] = 0
+    dummy_road_net.nodes['5']['population'] = 0
+    # dummy_road_net.nodes['population'] = [10, 0, 10, 0, 0]
     return dummy_roads, dummy_road_net
 
 
@@ -129,3 +130,5 @@ def test_disruption_calculations():
     assert disruption_df['rerouting_loss_person_time_m_amax'][0] == 40.0
 
 
+if __name__ =="__main__":
+    test_disruption_calculations()

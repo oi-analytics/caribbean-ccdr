@@ -1,5 +1,16 @@
 """Failure analysis of transport networks
 
+Timings:
+--------
+Truncating paths with threshold 99%.
+Truncating paths with threshold 99%.
+Number of paths before: 4,408.
+Number of paths after: 75.
+Took 6.1864 seconds. --- decided not to truncate as quick enough anyway.
+
+
+ Took 80.3913 seconds (1.34 minutes) without truncation.
+
 """
 import os
 os.environ['USE_PYGEOS'] = '0'
@@ -17,6 +28,7 @@ import transport_flow_and_disruption_functions as tfdf
 COUNTRY = 'LCA'
 COST = 'time_m'
 THRESH = 60
+TRUNC_THRESH = 1.
 ZETA = 1
 RECALCULATE_PATHS = False
 RECALCULATE_TRAFFIC = False
@@ -34,7 +46,7 @@ LCA_stats['total_beds'] = LCA_stats['beds_per_1000'] * (LCA_stats['pop_ref_year'
 
 def main(CONFIG):
     # set up directories
-    indir, datadir, figdir = CONFIG['paths']['incoming_data'], CONFIG['paths']['data'], CONFIG['paths']['figures']
+    datadir, resultsdir, figdir = CONFIG['paths']['data'], CONFIG['paths']['results'], CONFIG['paths']['figures']
 
     # load roads
     roads, road_net = tfdf.get_roads(os.path.join(datadir, 'infrastructure', 'transport'), COUNTRY, EDGE_ATTRS)
@@ -55,11 +67,14 @@ def main(CONFIG):
     health.loc[other_ix, 'capacity'] = LCA_stats['total_beds'] / total
 
     # step 1: get path and flux dataframe and save
-    path_df, road_net = tfdf.process_health_fluxes(roads, road_net, health, datadir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS)
+    path_df, road_net = tfdf.process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS)
+
+    # step 1(b): truncate disruption to remove smallest fluxes
+    path_df, *_ = tfdf.truncate_by_threshold(path_df, threshold=TRUNC_THRESH)
 
     # step 2: model disruption
-    outfile = os.path.join(datadir, "infrastructure", "transport", f"{COUNTRY.lower()}_health_roads_edges_sector_damages_with_roads")
-    disruption_file = os.path.join(datadir, "infrastructure", "transport", f"{COUNTRY.lower()}_roads_edges_sector_damages.parquet")
+    outfile = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_health_roads_edges_sector_damages_with_roads")
+    disruption_file = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_roads_edges_sector_damages.parquet")
     disruption_df = pd.read_parquet(disruption_file)
     disruption_df = tfdf.get_disruption_stats(disruption_df, path_df, road_net, COST)
     disruption_df.head(10).to_csv(f"{outfile}.csv")
@@ -67,7 +82,7 @@ def main(CONFIG):
 
     # step 3: add traffic to road edges
     if RECALCULATE_TRAFFIC:
-        pathname = os.path.join(datadir, 'infrastructure', 'transport', f"{COUNTRY}_health_traffic_{COST}_{THRESH}")
+        pathname = os.path.join(resultsdir, 'transport', 'traffic', f"{COUNTRY}_health_traffic_{COST}_{THRESH}")
         traffic_df = tfdf.get_flow_on_edges(path_df, 'edge_id', 'edge_path', 'flux')
         traffic_df = traffic_df.rename(columns={'flux': 'traffic'})
         roads_traffic = roads.merge(traffic_df, how='left', on='edge_id')

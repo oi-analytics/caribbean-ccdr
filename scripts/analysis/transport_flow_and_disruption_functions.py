@@ -62,8 +62,8 @@ def get_roads(indir, country: str, edge_attrs: list):
     roads = roads[roads.apply(lambda row: (row['from_node'] not in missing) & (row['to_node'] not in missing), axis=1)]
 
     # print results
-    print(f"Number of nodes: {road_net.number_of_nodes()}")
-    print(f"Number of edges: {road_net.number_of_edges()}")
+    print(f"Number of nodes: {road_net.number_of_nodes():,.0f}")
+    print(f"Number of edges: {road_net.number_of_edges():,.0f}")
 
     return roads, road_net
 
@@ -105,14 +105,14 @@ def plot_district_traffic(roads, buildings, district, district_label, population
     return fig
 
 
-def process_school_fluxes(roads, road_net, schools, admin_areas, datadir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS):
+def process_school_fluxes(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS):
 
         # divide road dataframe into intra-admin area roads
         roads_by_district = gpd.sjoin(roads, admin_areas, how="inner", predicate='within').reset_index(drop=True).drop('index_right', axis=1)
 
         paths_df = []
         road_nets = []
-        pathname = os.path.join(datadir, 'infrastructure', 'transport', f'{COUNTRY}_schools_pathdata_{COST}_{THRESH}')
+        pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_schools_pathdata_{COST}_{THRESH}')
 
         # process road network and recalculate paths (if RECALCULATE_PATHS)
         for district in [*roads_by_district['school_district'].unique()]:
@@ -161,7 +161,8 @@ def process_school_fluxes(roads, road_net, schools, admin_areas, datadir, COUNTR
 
         return paths_df, school_road_net, roads_by_district
 
-def process_health_fluxes(roads, road_net, health, datadir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS):
+
+def process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS):
     # get all node geometries
     node_geoms = {node: Point(line.coords[-1]) for node, line in zip(roads['to_node'], roads['geometry'])}
     node_geoms = node_geoms | {node: Point(line.coords[0]) for node, line in zip(roads['from_node'], roads['geometry']) if node not in node_geoms.keys()}
@@ -184,7 +185,7 @@ def process_health_fluxes(roads, road_net, health, datadir, COUNTRY, COST, THRES
     test_pop_assignment(road_net, nearest_nodes, rename_health, 'capacity')
 
     # get path and flux dataframe and save
-    pathname = os.path.join(datadir, 'infrastructure', 'transport', f'{COUNTRY}_health_pathdata_{COST}_{THRESH}')
+    pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_health_pathdata_{COST}_{THRESH}')
     if RECALCULATE_PATHS:
         paths_df = get_flux_data(road_net, COST, THRESH, ZETA, origin_class='domestic', dest_class='hospital', class_str='class')
         paths_df.to_parquet(path=f"{pathname}.parquet", index=True)
@@ -193,6 +194,7 @@ def process_health_fluxes(roads, road_net, health, datadir, COUNTRY, COST, THRES
         paths_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
 
     return paths_df, road_net
+
 
 def test_traffic_assignment(roads_traffic, roads):
     assert len(roads) == len(roads_traffic), 'no road edges should be deleted after assigning traffic'
@@ -416,16 +418,62 @@ def get_flow_paths_indexes_of_edges(flow_dataframe, path_string):
     return edge_path_index
 
 
+def truncate_by_threshold(paths, flux_column='flux', threshold=.99):
+    print(f"Truncating paths with threshold {threshold * 100:.0f}%.")
+    paths_sorted = paths.reset_index(drop=True).sort_values(by=flux_column, ascending=False)
+    fluxes_sorted = paths_sorted[flux_column]
+    total_flux = fluxes_sorted.sum()
+    flux_percentiles = fluxes_sorted.cumsum() / total_flux
+    excess = flux_percentiles[flux_percentiles >= threshold]
+    cutoff = excess.idxmin()
+    keep = flux_percentiles[flux_percentiles <= threshold].index
+    paths_truncated = paths_sorted.loc[keep, :]
+    print(f"Number of paths before: {len(paths_sorted):,.0f}.")
+    print(f"Number of paths after: {len(paths_truncated):,.0f}.")
+    return paths_truncated, fluxes_sorted, flux_percentiles, keep, cutoff
+
+
+def plot_path_truncation(fluxes_sorted, flux_percentiles, cutoff, threshold):
+    fig, axs = plt.subplots(1, 2, figsize=(10, 3))
+
+    ax = axs[0]
+    ax.plot(fluxes_sorted.values, flux_percentiles.values, alpha=.8, linewidth=.5, color='black')
+    ax.axvline(x=fluxes_sorted[cutoff], linestyle='--', color='red', linewidth=.5)
+    ax.axhline(y=threshold, linestyle='--', color='red', linewidth=.5, alpha=.8)
+    ax.fill_between(x=fluxes_sorted, y1=flux_percentiles, where=fluxes_sorted>fluxes_sorted[cutoff], alpha=.8, color="w", edgecolor='black', hatch='//')
+    ax.invert_xaxis()
+    ax.set_xscale('log')
+    ax.set_xlabel('Log(flux)')
+    ax.set_ylabel('Cumulative density')
+
+    ax = axs[1]
+    fluxes_sorted.hist(ax=ax, alpha=.8, edgecolor='black', color='white', hatch='//')
+    ax.axvline(x=fluxes_sorted[cutoff], linestyle='--', color='red', linewidth=.5)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.invert_xaxis()
+    ax.set_ylabel('Number of observations (log)')
+    ax.set_xlabel('Flux (log)')
+    ax.grid(False);
+
+    plt.suptitle('Choice of cutoff based-on fluxes')
+    
+    return fig
+
+@timeit
 def get_disruption_stats(disruption_df, path_df, road_net, COST):
         all_fail_lists = disruption_df[['asset_set_amin', 'asset_set_mean', 'asset_set_amax']].to_numpy().flatten()     # get all damaged road combinations
         all_fail_lists = [np.array(x, dtype='object') for x in set(tuple(x) for x in all_fail_lists if x is not None)]  # reduce to all unique lists of damaged edges
+        edge_flow_path_indices = get_flow_paths_indexes_of_edges(path_df, 'edge_path')
 
         # simulate each disruption
         first_loop = 0
         for fail_list in (pbar:=tqdm(all_fail_lists)):
-            pbar.set_description(f"Processing {len(all_fail_lists)} edge failure sets.")
-            result = model_disruption(fail_list, path_df, road_net, COST)
+            print(f"Processing {len(all_fail_lists)} edge failure sets.")
+            print("Simulating model disruption...")
+            result = model_disruption(fail_list, path_df, road_net, edge_flow_path_indices, COST)
             if result is not None:
+                print("Aggregating disruption stats...")
                 path_df_disrupted, aggregated_disruption = result[0], result[1]
                 # all dataframe indices where this failure combo occurs
                 min_idx = disruption_df[disruption_df['asset_set_amin'].apply(lambda x: str(x) == str(fail_list))].index
@@ -446,13 +494,9 @@ def get_disruption_stats(disruption_df, path_df, road_net, COST):
 
 
 # @timeit
-def model_disruption(edge_fail_ids, paths_df, road_net, COST, other_costs=[]):
+def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, COST, other_costs=[]):
     """Model disruption changes to paths for a list of failed edges.
-    
-    TODO: calculate new costs for other (non primary) costs too
     """
-    
-    edge_flow_path_indices = get_flow_paths_indexes_of_edges(paths_df, 'edge_path')
     road_net_df = nx.to_pandas_edgelist(road_net)
     edge_fail_dict = igraph_scenario_edge_failures(road_net_df, edge_fail_ids, paths_df,
                                                    edge_flow_path_indices, 'edge_path',
@@ -469,15 +513,15 @@ def model_disruption(edge_fail_ids, paths_df, road_net, COST, other_costs=[]):
         
         agg_kwargs= {
                     "trips_lost": ("lost_flux", sum),                                           # total #trips lost
-                    "%trips_lost": ("no_access", np.mean),                                      # % of trips lost, TODO: sanity check this
-                    f"{COST}_delta": (f"delta_{COST}", sum),                                    # total increase in COST
-                    f"%{COST}_delta": (f'perc_delta_{COST}', np.mean),                          # average % increase in COST
+                    "%trips_lost": ("no_access", sum),                                          # % of trips lost, divide by number of paths
+                    f"{COST}_delta": (f"delta_{COST}", sum),                                    # total increase in COST over network
+                    f"%{COST}_delta": (f'perc_delta_{COST}', np.mean),                          # average % increase in COST over rerouted paths: TODO: check this
                     f"rerouting_loss_person_{COST}": (f"rerouting_loss_person_{COST}", sum)     # total person hours (or whatever COST is)
                     }
         
         aggregated_disruption = path_df_disrupted.groupby(['failed_edges'])[["lost_flux", "no_access", f"delta_{COST}", f"perc_delta_{COST}", f"rerouting_loss_person_{COST}"]].agg(**agg_kwargs)
+        aggregated_disruption["%trips_lost"] = aggregated_disruption["%trips_lost"] / len(paths_df)
         return path_df_disrupted, aggregated_disruption
-
 
 
 def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
@@ -523,7 +567,6 @@ def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
 
         for i in range(len(A)):
             network_graph = A[i]
-            igraph_labels = {node_label: igraph_label for node_label, igraph_label in zip(network_graph.vs['name'], range(len(network_graph.vs['name'])))}
 
             nodes_name = np.asarray([x['name'] for x in network_graph.vs])
             po_access = select_flows[(select_flows['origin_id'].isin(nodes_name)) & (
@@ -540,7 +583,7 @@ def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
                     flows = po_access.loc[[origin], flow_column].values.tolist()
                     for destination, cost, flow in zip(destinations, costs, flows):
 
-                        paths = network_graph.get_shortest_paths(igraph_labels[origin], igraph_labels[destination], weights=cost_criteria, output="epath")
+                        paths = network_graph.get_shortest_paths(origin, destination, weights=cost_criteria, output="epath")
                         assert len(paths) == 1, f"{len(paths)} shortest paths found. Code only works for 1."
                         path = paths[0]
                         new_cost = sum(network_graph.es[edge][cost_criteria] for edge in path)
