@@ -19,12 +19,12 @@ import transport_flow_and_disruption_functions as tfdf
 
 
 # global settings
-COUNTRY = 'LCA'
+COUNTRY = 'GRD'
 COST = 'time_m'
 THRESH = 30
 TRUNC_THRESH = .95
 ZETA = 1
-RECALCULATE_PATHS = False
+RECALCULATE_PATHS = True
 RECALCULATE_TRAFFIC = False
 EDGE_ATTRS = ['edge_id', 'length_m', 'time_m']
 plot_kwargs = {'dpi': 400, 'bbox_inches': 'tight'}
@@ -53,14 +53,14 @@ def main(CONFIG):
     # step 2: model disruption
     outdir = os.path.join(resultsdir, "transport", "disruption results")
     assert os.path.exists(outdir), f"Check results directory path matches {outdir} before running disruption."
-    outfile = os.path.join(outdir, f"{COUNTRY.lower()}_roads_edges_sector_damages_with_roads")
+    outfile = os.path.join(outdir, f"{COUNTRY.lower()}_roads_edges_sector_damages_with_rerouting")
     disruption_file = os.path.join(outdir, f"{COUNTRY.lower()}_roads_edges_sector_damages.parquet")
     disruption_df = pd.read_parquet(disruption_file)
     disruption_df = tfdf.get_disruption_stats(disruption_df, path_df, road_net, COST)
-    disruption_df.head(10).to_csv(f"{outfile}.csv")
     disruption_df.to_parquet(f"{outfile}.parquet")
 
     # step 3: add traffic to road edges
+    # TODO: outdated below here
     if RECALCULATE_TRAFFIC:
         pathname = os.path.join(resultsdir, 'transport','traffic', f"{COUNTRY}_traffic_{COST}_{THRESH}")
         traffic_df = tfdf.get_flow_on_edges(path_df, 'edge_id', 'edge_path', 'flux')
@@ -69,12 +69,6 @@ def main(CONFIG):
         tfdf.test_traffic_assignment(roads_traffic, roads)  # check number of edges unchanged
         roads_traffic.to_file(filename=f"{pathname}.gpkg", driver="GPKG", layer="roads")
 
-    # traffic recalculation
-    # roads_disrupted = tfdf.get_traffic_disruption(path_df, path_df_disrupted, roads_traffic, scenario_dict, COST)
-
-    # # plot some disrupted edges
-    # fig = tfdf.plot_failed_edge_traffic(roads_disrupted, scenario_dict, edge_ix=2, buffer=100)
-    # fig.savefig(os.path.join(figdir, f"{COUNTRY}_traffic_change_zoom_{scenario_dict['scenario_name']}_{COST}_{THRESH}.png"), **plot_kwargs)
 
 if __name__ == '__main__':
     CONFIG = load_config(os.path.join("..", "..", ".."))

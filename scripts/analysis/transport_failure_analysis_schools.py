@@ -59,14 +59,14 @@ def main(CONFIG):
     path_df, *_ = tfdf.truncate_by_threshold(path_df, threshold=TRUNC_THRESH)
 
     # step 2: model disruption
-    outfile = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_schools_roads_edges_sector_damages_with_roads")
+    outfile = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_schools_roads_edges_sector_damages_with_rerouting")
     disruption_file = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_roads_edges_sector_damages.parquet")
     disruption_df = pd.read_parquet(disruption_file)
     disruption_df = tfdf.get_disruption_stats(disruption_df, path_df, school_road_net, COST)
-    disruption_df.head(10).to_csv(f"{outfile}.csv")
     disruption_df.to_parquet(f"{outfile}.parquet")
 
     # step 3: add traffic to road edges
+    # TODO: all code below here outdated
     if RECALCULATE_TRAFFIC:
         pathname = os.path.join(resultsdir, 'transport', 'traffic', f"{COUNTRY}_schools_traffic_{COST}_{THRESH}")
         traffic_df = tfdf.get_flow_on_edges(path_df, 'edge_id', 'edge_path', 'flux')

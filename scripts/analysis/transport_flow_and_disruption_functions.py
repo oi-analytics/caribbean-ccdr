@@ -46,8 +46,11 @@ def get_roads(indir, country: str, edge_attrs: list):
     voronois = gpd.read_file(os.path.join(indir, f"{country}_roads_voronoi.gpkg"))
     voronois = voronois.set_index('node_id')
 
-    roads['from_pop'] = roads['from_node'].apply(lambda node: voronois.loc[node]['pop_2020'])
-    roads['to_pop'] = roads['to_node'].apply(lambda node: voronois.loc[node]['pop_2020'])
+    roads = roads.join(voronois[['pop_2020']], how='inner', on='from_node')
+    roads = roads.join(voronois[['pop_2020']], how='inner', on='to_node', lsuffix='_from', rsuffix='_to')
+    roads = roads.rename(columns={'pop_2020_from': 'from_pop', 'pop_2020_to': 'to_pop'})
+    # roads['from_pop'] = roads['from_node'].apply(lambda node: voronois.loc[node]['pop_2020'])
+    # roads['to_pop'] = roads['to_node'].apply(lambda node: voronois.loc[node]['pop_2020'])
 
     road_net = nx.convert_matrix.from_pandas_edgelist(roads, source='from_node', target='to_node', edge_attr=edge_attrs)
 
@@ -68,12 +71,12 @@ def get_roads(indir, country: str, edge_attrs: list):
     return roads, road_net
 
 
-def test_pop_assignment(road_net, buildings, renaming_dict, capacity_str):
+def test_pop_assignment(road_net, buildings, renaming_dict, bed_capacity_str):
     """Test building population assignments to road network nodes worked."""
     renaming_dict_r = {value: key for key, value in renaming_dict.items()}
     for building in buildings.itertuples():
         if building.node_id in road_net.nodes:
-            assert road_net.nodes[building.node_id]['population'] == getattr(building, capacity_str)
+            assert road_net.nodes[building.node_id]['population'] == getattr(building, bed_capacity_str)
         else:
             print(f"Missing {building.node_id}, index: {(building.Index)}, road node: {renaming_dict_r[building.node_id]}")
 
@@ -170,19 +173,19 @@ def process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, TH
 
     # find nearest nodes to each school building
     health['nearest_node'] = health.apply(lambda row: get_nearest_values(row, nodes_gdf, 'node'), axis=1)
-    aggfunc = {'node_id': lambda x : '_and_'.join(x), 'capacity': sum}
-    nearest_nodes = health[['nearest_node', 'node_id', 'capacity']].groupby('nearest_node').agg(aggfunc).reset_index()
+    aggfunc = {'node_id': lambda x : '_and_'.join(x), 'bed_capacity': sum}
+    nearest_nodes = health[['nearest_node', 'node_id', 'bed_capacity']].groupby('nearest_node').agg(aggfunc).reset_index()
     # tfdf.test_plot(nodes_gdf, health, **{'aspect': 1})
 
     # replace nodes with health in road network
     rename_health = {node_id: hospital_id for node_id, hospital_id in zip(nearest_nodes['nearest_node'], nearest_nodes['node_id'])}
-    hospital_pops = {hospital_id: hospital_pop for hospital_id, hospital_pop in zip(nearest_nodes['node_id'], nearest_nodes['capacity'])}
+    hospital_pops = {hospital_id: hospital_pop for hospital_id, hospital_pop in zip(nearest_nodes['node_id'], nearest_nodes['bed_capacity'])}
     hospital_classes = {hospital_id: "hospital" for hospital_id in nearest_nodes['node_id']}
     road_net = nx.relabel_nodes(road_net, rename_health, copy=True)
     nx.set_node_attributes(road_net, hospital_pops, name="population")
     nx.set_node_attributes(road_net, "domestic", name="class")
     nx.set_node_attributes(road_net, hospital_classes, name="class")
-    test_pop_assignment(road_net, nearest_nodes, rename_health, 'capacity')
+    test_pop_assignment(road_net, nearest_nodes, rename_health, 'bed_capacity')
 
     # get path and flux dataframe and save
     pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_health_pathdata_{COST}_{THRESH}')
