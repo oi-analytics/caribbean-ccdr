@@ -506,6 +506,7 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
                                                    COST, 'flux')
     
     total_flux = paths_df['flux'].sum()
+    total_time = ((1 - path_df_disrupted["no_access"]) * path_df_disrupted[COST]).sum()
 
     if edge_fail_dict:
         path_df_disrupted = pd.DataFrame(edge_fail_dict)
@@ -526,6 +527,7 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
         
         aggregated_disruption = path_df_disrupted.groupby(['failed_edges'])[["lost_flux", "no_access", f"delta_{COST}", f"perc_delta_{COST}", f"rerouting_loss_person_{COST}"]].agg(**agg_kwargs)
         aggregated_disruption["%trips_lost"] = aggregated_disruption["%trips_lost"] / total_flux
+        aggregated_disruption[f"%{COST}_delta_total"] = aggregated_disruption[f"delta_{COST}"] / total_time
         return path_df_disrupted, aggregated_disruption
 
 
