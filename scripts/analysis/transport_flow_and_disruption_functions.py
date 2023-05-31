@@ -504,6 +504,8 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
     edge_fail_dict = igraph_scenario_edge_failures(road_net_df, edge_fail_ids, paths_df,
                                                    edge_flow_path_indices, 'edge_path',
                                                    COST, 'flux')
+    
+    total_flux = paths_df['flux'].sum()
 
     if edge_fail_dict:
         path_df_disrupted = pd.DataFrame(edge_fail_dict)
@@ -515,15 +517,15 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
         path_df_disrupted[f"rerouting_loss_person_{COST}"] = (path_df_disrupted[f'delta_{COST}']) * path_df_disrupted['flux']
         
         agg_kwargs= {
-                    "trips_lost": ("lost_flux", sum),                                           # total #trips lost
-                    "%trips_lost": ("no_access", sum),                                          # % of trips lost, divide by number of paths
+                    "trips_lost": ("lost_flux", sum),                                           # total #trips lost (i.e., #people)
+                    "%trips_lost": ("lost_flux", sum),                                          # %trips lost, divide by number of paths below
                     f"{COST}_delta": (f"delta_{COST}", sum),                                    # total increase in COST over network
                     f"%{COST}_delta": (f'perc_delta_{COST}', np.mean),                          # average % increase in COST over rerouted paths: TODO: check this
                     f"rerouting_loss_person_{COST}": (f"rerouting_loss_person_{COST}", sum)     # total person hours (or whatever COST is)
                     }
         
         aggregated_disruption = path_df_disrupted.groupby(['failed_edges'])[["lost_flux", "no_access", f"delta_{COST}", f"perc_delta_{COST}", f"rerouting_loss_person_{COST}"]].agg(**agg_kwargs)
-        aggregated_disruption["%trips_lost"] = aggregated_disruption["%trips_lost"] / len(paths_df)
+        aggregated_disruption["%trips_lost"] = aggregated_disruption["%trips_lost"] / total_flux
         return path_df_disrupted, aggregated_disruption
 
 
