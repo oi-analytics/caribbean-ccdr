@@ -506,7 +506,6 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
                                                    COST, 'flux')
     
     total_flux = paths_df['flux'].sum()
-    total_time = ((1 - path_df_disrupted["no_access"]) * path_df_disrupted[COST]).sum()
 
     if edge_fail_dict:
         path_df_disrupted = pd.DataFrame(edge_fail_dict)
@@ -516,6 +515,8 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
         path_df_disrupted[f'delta_{COST}'] = (1 - path_df_disrupted["no_access"]) * (path_df_disrupted[f"new_{COST}"] - path_df_disrupted[COST])
         path_df_disrupted[f'perc_delta_{COST}'] = (1 - path_df_disrupted["no_access"]) * (path_df_disrupted[f"new_{COST}"] - path_df_disrupted[COST]) / path_df_disrupted[COST]
         path_df_disrupted[f"rerouting_loss_person_{COST}"] = (path_df_disrupted[f'delta_{COST}']) * path_df_disrupted['flux']
+
+        total_time = ((1 - path_df_disrupted["no_access"]) * path_df_disrupted[COST]).sum()
         
         agg_kwargs= {
                     "trips_lost": ("lost_flux", sum),                                           # total #trips lost (i.e., #people)
@@ -529,7 +530,7 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
         
         # get percentages right
         aggregated_disruption["%trips_lost"] = np.round(100 * (aggregated_disruption["%trips_lost"] / total_flux ), 4)
-        aggregated_disruption[f"%{COST}_delta"] = np.round(100 * aggregated_disruption[f"%{COST}_delta"], 4
+        aggregated_disruption[f"%{COST}_delta"] = np.round(100 * aggregated_disruption[f"%{COST}_delta"], 4)
         aggregated_disruption[f"%{COST}_delta_total"] = np.round(100 * (aggregated_disruption[f"delta_{COST}"] / total_time), 4)
 
         return path_df_disrupted, aggregated_disruption
