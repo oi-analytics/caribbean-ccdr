@@ -531,7 +531,7 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
         # get percentages right
         aggregated_disruption["%trips_lost"] = np.round(100 * (aggregated_disruption["%trips_lost"] / total_flux ), 4)
         aggregated_disruption[f"%{COST}_delta"] = np.round(100 * aggregated_disruption[f"%{COST}_delta"], 4)
-        aggregated_disruption[f"%{COST}_delta_total"] = np.round(100 * (aggregated_disruption[f"delta_{COST}"] / total_time), 4)
+        aggregated_disruption[f"%{COST}_delta_total"] = np.round(100 * (aggregated_disruption[f"{COST}_delta"] / total_time), 4)
 
         return path_df_disrupted, aggregated_disruption
 
