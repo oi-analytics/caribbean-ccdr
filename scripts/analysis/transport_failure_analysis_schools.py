@@ -43,26 +43,29 @@ def main(CONFIG):
     schools = gpd.read_file(join(datadir, 'infrastructure', 'social', 'education.gpkg'))
     schools = schools[schools['iso_code'] == COUNTRY]
 
-    # load school districts (add to this when more countries)
+    # load school districts (slightly different file formats)
     if COUNTRY == 'LCA':
         admin_areas = gpd.read_file(join(datadir, 'infrastructure', 'social', f'{COUNTRY.lower()}_edu_districts.gpkg'), layer='areas')[["DIS","geometry"]]
         admin_areas.loc[:, "DIS"] = admin_areas.apply(lambda x: str(num2words(x["DIS"])).title(), axis=1)
         admin_areas.rename(columns={"DIS": "school_district"},inplace=True)
+    elif COUNTRY == "VCT":
+        admin_areas = gpd.read_file(os.path.join(datadir, 'infrastructure', 'social', f'{COUNTRY.lower()}_edu_districts.gpkg'))[["SCHOOL_DIST","geometry"]]
+        admin_areas["SCHOOL_DIST"] = admin_areas.apply(lambda x: str(num2words(x["SCHOOL_DIST"])).title(),axis=1)
+        admin_areas.rename(columns={"SCHOOL_DIST": "school_district"},inplace=True)
+    # TODO: GRD and DMA
     admin_areas = admin_areas.to_crs(epsg=caribbean_epsg)
     admin_areas.loc[:, "school_district"] = admin_areas["school_district"].astype(str).str.replace("Saint","St.")
 
     # step 1: get path and flux dataframe and save
-    path_df, school_road_net, roads_by_district = tfdf.process_school_fluxes(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS)
+    # path_df, school_road_net, roads_by_district = tfdf.process_school_fluxes(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH)
+    path_df, *_ = tfdf.process_school_fluxes_new(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH)
     # path_df.describe()  # max time to get to any school: 40.79 mins, min: 0 mins
-
-    # step 1(b): truncate disruption to remove smallest fluxes
-    path_df, *_ = tfdf.truncate_by_threshold(path_df, threshold=TRUNC_THRESH)
 
     # step 2: model disruption
     outfile = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_schools_roads_edges_sector_damages_with_rerouting")
     disruption_file = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_roads_edges_sector_damages.parquet")
     disruption_df = pd.read_parquet(disruption_file)
-    disruption_df = tfdf.get_disruption_stats(disruption_df, path_df, school_road_net, COST)
+    disruption_df = tfdf.get_disruption_stats(disruption_df, path_df, road_net, COST)
     disruption_df.to_parquet(f"{outfile}.parquet")
 
     # step 3: add traffic to road edges
@@ -71,8 +74,8 @@ def main(CONFIG):
         pathname = os.path.join(resultsdir, 'transport', 'traffic', f"{COUNTRY}_schools_traffic_{COST}_{THRESH}")
         traffic_df = tfdf.get_flow_on_edges(path_df, 'edge_id', 'edge_path', 'flux')
         traffic_df = traffic_df.rename(columns={'flux': 'traffic'})
-        roads_traffic = roads_by_district.merge(traffic_df, how='left', on='edge_id')
-        tfdf.test_traffic_assignment(roads_traffic, roads_by_district)  # check number of edges unchanged
+        roads_traffic = roads.merge(traffic_df, how='left', on='edge_id')
+        tfdf.test_traffic_assignment(roads_traffic, roads)  # check number of edges unchanged
         roads_traffic.to_file(filename=f"{pathname}.gpkg", driver="GPKG", layer="roads")
 
     # # plot example of school traffic

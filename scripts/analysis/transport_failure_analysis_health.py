@@ -28,9 +28,9 @@ import transport_flow_and_disruption_functions as tfdf
 COUNTRY = 'LCA'
 COST = 'time_m'
 THRESH = 60
-TRUNC_THRESH = 1.
+TRUNC_THRESH = 1
 ZETA = 1
-RECALCULATE_PATHS = False
+RECALCULATE_PATHS = True
 RECALCULATE_TRAFFIC = False
 EDGE_ATTRS = ['edge_id', 'length_m', 'time_m']
 plot_kwargs = {'dpi': 400, 'bbox_inches': 'tight'}
@@ -50,10 +50,7 @@ def main(CONFIG):
     health = health.to_crs(caribbean_epsg)
 
     # step 1: get path and flux dataframe and save
-    path_df, road_net = tfdf.process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS)
-
-    # step 1(b): truncate disruption to remove smallest fluxes
-    path_df, *_ = tfdf.truncate_by_threshold(path_df, threshold=TRUNC_THRESH)
+    path_df, road_net = tfdf.process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH)
 
     # step 2: model disruption
     outfile = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_health_roads_edges_sector_damages_with_rerouting")
@@ -71,6 +68,7 @@ def main(CONFIG):
         roads_traffic = roads.merge(traffic_df, how='left', on='edge_id')
         tfdf.test_traffic_assignment(roads_traffic, roads)  # check number of edges unchanged
         roads_traffic.to_file(filename=f"{pathname}.gpkg", driver="GPKG", layer="roads")
+
 
 if __name__ == '__main__':
     CONFIG = load_config(os.path.join("..", "..", ".."))

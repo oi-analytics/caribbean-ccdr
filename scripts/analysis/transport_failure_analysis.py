@@ -39,16 +39,11 @@ def main(CONFIG):
     # step 1: get path and flux dataframe and save
     pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_pathdata_{COST}_{THRESH}')
     if RECALCULATE_PATHS:
-        path_df = tfdf.get_flux_data(road_net, COST, THRESH, ZETA, other_costs=['length_m'])
+        path_df = tfdf.get_flux_data(road_net, COST, THRESH, ZETA, other_costs=['length_m'], thresh=TRUNC_THRESH)
         path_df.to_parquet(path=f"{pathname}.parquet", index=True)
         print(f"Paths data saved as {pathname}.parquet.")
     else:
         path_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
-
-    # step 1(b): truncate disruption to remove smallest fluxes
-    path_df, fluxes_sorted, flux_percentiles, keep, cutoff = tfdf.truncate_by_threshold(path_df, threshold=TRUNC_THRESH)
-    fig = tfdf.plot_path_truncation(fluxes_sorted, flux_percentiles, cutoff, TRUNC_THRESH)
-    fig.savefig(os.path.join(figdir, "thresholding.png"), dpi=300, bbox_inches='tight')
 
     # step 2: model disruption
     outdir = os.path.join(resultsdir, "transport", "disruption results")

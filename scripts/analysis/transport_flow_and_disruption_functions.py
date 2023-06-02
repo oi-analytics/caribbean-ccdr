@@ -108,64 +108,108 @@ def plot_district_traffic(roads, buildings, district, district_label, population
     return fig
 
 
-def process_school_fluxes(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS):
+def process_school_fluxes(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH):
+    paths_df = []
+    road_nets = []
+    pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_schools_pathdata_{COST}_{THRESH}')
 
-        # divide road dataframe into intra-admin area roads
-        roads_by_district = gpd.sjoin(roads, admin_areas, how="inner", predicate='within').reset_index(drop=True).drop('index_right', axis=1)
+    # divide road dataframe into intra-admin area roads
+    roads_by_district = gpd.sjoin(roads, admin_areas, how="inner", predicate='within').reset_index(drop=True).drop('index_right', axis=1)
 
-        paths_df = []
-        road_nets = []
-        pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_schools_pathdata_{COST}_{THRESH}')
+    # process road network and recalculate paths (if RECALCULATE_PATHS)
+    for district in [*roads_by_district['school_district'].unique()]:
+        # subset geodataframes to district
+        roads_district = roads_by_district[roads_by_district['school_district'] == district].copy()
+        road_net_dist = road_net.edge_subgraph([(u, v) for u, v in zip(roads_district['from_node'], roads_district['to_node'])])
+        schools_district = schools[schools['school_district'] == district].copy()
 
-        # process road network and recalculate paths (if RECALCULATE_PATHS)
-        for district in [*roads_by_district['school_district'].unique()]:
-            # subset geodataframes to district
-            roads_district = roads_by_district[roads_by_district['school_district'] == district].copy()
-            road_net_dist = road_net.edge_subgraph([(u, v) for u, v in zip(roads_district['from_node'], roads_district['to_node'])])
-            schools_district = schools[schools['school_district'] == district].copy()
+        # get all node geometries
+        node_geoms = {node: Point(line.coords[-1]) for node, line in zip(roads_district['to_node'], roads_district['geometry'])}
+        node_geoms = node_geoms | {node: Point(line.coords[0]) for node, line in zip(roads_district['from_node'], roads_district['geometry']) if node not in node_geoms.keys()}
+        nodes_gdf = gpd.GeoDataFrame.from_dict(node_geoms, orient='index').reset_index().rename(columns={'index': 'node', 0: 'geometry'}).set_geometry('geometry')
+        
+        # find nearest nodes to each school building
+        schools_district.loc[:, 'nearest_node'] = schools_district.apply(lambda row: get_nearest_values(row, nodes_gdf, 'node'), axis=1)
+        aggfunc = {'node_id': lambda x : '_and_'.join(x), 'assigned_students': sum}
+        nearest_nodes = schools_district[['nearest_node', 'node_id', 'assigned_students']].groupby('nearest_node').agg(aggfunc).reset_index()
+        
+        # replace nodes with schools in road network
+        rename_schools = {node_id: school_id for node_id, school_id in zip(nearest_nodes['nearest_node'], nearest_nodes['node_id'])}
+        school_pops = {school_id: school_pop for school_id, school_pop in zip(nearest_nodes['node_id'], nearest_nodes['assigned_students'])}
+        school_classes = {school_id: "school" for school_id in nearest_nodes['node_id']}
+        road_net_dist = nx.relabel_nodes(road_net_dist, rename_schools, copy=True)
+        nx.set_node_attributes(road_net_dist, school_pops, name="population")
+        nx.set_node_attributes(road_net_dist, "domestic", name="class")
+        nx.set_node_attributes(road_net_dist, school_classes, name="class")
+        
+        # some tests here
+        test_pop_assignment(road_net_dist, nearest_nodes, rename_schools, 'assigned_students')
+        # test_plot(nodes_gdf, nearest_nodes)
 
-            # get all node geometries
-            node_geoms = {node: Point(line.coords[-1]) for node, line in zip(roads_district['to_node'], roads_district['geometry'])}
-            node_geoms = node_geoms | {node: Point(line.coords[0]) for node, line in zip(roads_district['from_node'], roads_district['geometry']) if node not in node_geoms.keys()}
-            nodes_gdf = gpd.GeoDataFrame.from_dict(node_geoms, orient='index').reset_index().rename(columns={'index': 'node', 0: 'geometry'}).set_geometry('geometry')
-            
-            # find nearest nodes to each school building
-            schools_district.loc[:, 'nearest_node'] = schools_district.apply(lambda row: get_nearest_values(row, nodes_gdf, 'node'), axis=1)
-            aggfunc = {'node_id': lambda x : '_and_'.join(x), 'assigned_students': sum}
-            nearest_nodes = schools_district[['nearest_node', 'node_id', 'assigned_students']].groupby('nearest_node').agg(aggfunc).reset_index()
-            
-            # replace nodes with schools in road network
-            rename_schools = {node_id: school_id for node_id, school_id in zip(nearest_nodes['nearest_node'], nearest_nodes['node_id'])}
-            school_pops = {school_id: school_pop for school_id, school_pop in zip(nearest_nodes['node_id'], nearest_nodes['assigned_students'])}
-            school_classes = {school_id: "school" for school_id in nearest_nodes['node_id']}
-            road_net_dist = nx.relabel_nodes(road_net_dist, rename_schools, copy=True)
-            nx.set_node_attributes(road_net_dist, school_pops, name="population")
-            nx.set_node_attributes(road_net_dist, "domestic", name="class")
-            nx.set_node_attributes(road_net_dist, school_classes, name="class")
-            
-            # some tests here
-            test_pop_assignment(road_net_dist, nearest_nodes, rename_schools, 'assigned_students')
-            # test_plot(nodes_gdf, nearest_nodes)
-
-            # get path and flux data
-            if RECALCULATE_PATHS:
-                path_df = get_flux_data(road_net_dist, COST, THRESH, ZETA, origin_class='domestic', dest_class='school', class_str='class')
-                path_df.loc[:, 'school_district'] = district
-                paths_df.append(path_df)
-
-            road_nets.append(road_net)
-
-        # get path data and subdivided road network
+        # get path and flux data
         if RECALCULATE_PATHS:
-            pd.concat(paths_df).to_parquet(path=f"{pathname}.parquet", index=True)
-        else:
-            paths_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
-        school_road_net = nx.compose_all(road_nets)
+            path_df = get_flux_data(road_net_dist, COST, THRESH, ZETA, origin_class='domestic', dest_class='school', class_str='class')
+            path_df.loc[:, 'school_district'] = district
+            paths_df.append(path_df)
 
-        return paths_df, school_road_net, roads_by_district
+        road_nets.append(road_net)
+
+    # get path data and subdivided road network
+    if RECALCULATE_PATHS:
+        paths_df = pd.concat(paths_df)
+        paths_df, *_ = truncate_by_threshold(paths_df, threshold=TRUNC_THRESH)
+        paths_df.to_parquet(path=f"{pathname}.parquet", index=True)
+    else:
+        paths_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
+
+    school_road_net = nx.compose_all(road_nets)
+    return paths_df, school_road_net, roads_by_district
 
 
-def process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS):
+def process_school_fluxes_new(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH):
+    pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_schools_pathdata_{COST}_{THRESH}')
+
+    if RECALCULATE_PATHS:
+        # assign domestic classes for road network
+        roads_district = get_origin_intersection(roads, admin_areas, **{'how': 'inner', 'distance_col': None})
+        domestic_classes = {node_id: f"domestic_{school_district}" for node_id, school_district in zip(roads_district['from_node'], roads_district['school_district'])}
+
+        # locate dest nodes nearest to schools
+        roads_district['dest'] = roads_district.geometry.apply(lambda x: Point(x.coords[-1]))
+        schools.loc[:, 'nearest_node'] = schools.apply(lambda x: get_nearest_values(x, roads_district.set_geometry('dest'), 'to_node'), axis=1)
+        aggfunc = {'node_id': lambda x : '_and_'.join(x), 'assigned_students': sum, 'school_district': pd.Series.mode}
+        nearest_nodes = schools[['nearest_node', 'node_id', 'assigned_students', 'school_district']].groupby('nearest_node').agg(aggfunc).reset_index()
+
+        # prepare to add school ids, school populations and node classes to the network
+        rename_schools = {node_id: school_id for node_id, school_id in zip(nearest_nodes['nearest_node'], nearest_nodes['node_id'])}
+        school_pops = {school_id: school_pop for school_id, school_pop in zip(nearest_nodes['node_id'], nearest_nodes['assigned_students'])}
+        school_classes = {school_id: f"school_{school_district}" for school_id, school_district in zip(nearest_nodes['node_id'], nearest_nodes['school_district'])}
+
+        # modify networkx road network
+        road_net = nx.relabel_nodes(road_net, rename_schools, copy=True)
+        nx.set_node_attributes(road_net, school_pops, name="population")
+        nx.set_node_attributes(road_net, domestic_classes, name="class")
+        nx.set_node_attributes(road_net, school_classes, name="class")
+        
+        # calculate paths from households to schools
+        paths_df = []
+        for district in admin_areas['school_district'].unique():
+            path_df = get_flux_data(road_net, COST, THRESH, ZETA, origin_class=f"domestic_{district}", dest_class=f"school_{district}", class_str='class')
+            path_df.loc[:, 'school_district'] = district
+            paths_df.append(path_df)
+        path_df = pd.concat(paths_df)
+        path_df, *_ = truncate_by_threshold(path_df, threshold=TRUNC_THRESH)
+
+        paths_df = pd.concat(paths_df)
+        paths_df, *_ = truncate_by_threshold(paths_df, threshold=TRUNC_THRESH)
+        paths_df.to_parquet(path=f"{pathname}.parquet", index=True)
+    else:
+        paths_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
+
+    return paths_df, road_net
+
+
+def process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH):
     # get all node geometries
     node_geoms = {node: Point(line.coords[-1]) for node, line in zip(roads['to_node'], roads['geometry'])}
     node_geoms = node_geoms | {node: Point(line.coords[0]) for node, line in zip(roads['from_node'], roads['geometry']) if node not in node_geoms.keys()}
@@ -190,13 +234,95 @@ def process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, TH
     # get path and flux dataframe and save
     pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_health_pathdata_{COST}_{THRESH}')
     if RECALCULATE_PATHS:
-        paths_df = get_flux_data(road_net, COST, THRESH, ZETA, origin_class='domestic', dest_class='hospital', class_str='class')
+        paths_df = get_flux_data(road_net, COST, THRESH, ZETA, origin_class='domestic', dest_class='hospital', class_str='class', thresh=TRUNC_THRESH)
         paths_df.to_parquet(path=f"{pathname}.parquet", index=True)
         print(f"Paths data saved as {pathname}.parquet.")
     else:
         paths_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
 
     return paths_df, road_net
+
+
+@timeit
+def get_flux_data(G, cost, C, zeta, other_costs = [], population="population", pop_thresh=5, origin_class=None, dest_class=None, class_str='', thresh=1):
+    """
+    Estimate total traffic flows using radiation model and cost function on edges, based on [1].
+
+    Parameters:
+    -----------
+    origin_class : str
+        asserts all source nodes belong to specific class
+    dest_class : str
+        asserts all destination nodes belong to specific class
+    """
+
+    fluxes = {}
+    paths = {}
+    costs = {}
+    other_costs = {other_cost: {} for other_cost in other_costs}
+
+    for a in (pbar := tqdm(G.nodes, desc='processing paths from source nodes', total=G.number_of_nodes())):
+        if G.nodes[a].get(class_str) == origin_class:
+            m_a = G.nodes[a][population]
+            if m_a > pop_thresh:
+                # calculate each node's predecessors and its the cost of its shortest path to the source node
+                costs_a, paths_a = nx.shortest_paths.single_source_dijkstra(G, a, cutoff=C, weight=cost)
+                for b in paths_a.keys():
+                    if b != a and G.nodes[b].get(class_str) == dest_class:
+                        n_b = G.nodes[b][population]
+                        if n_b > pop_thresh:
+                            c_ab = costs_a[b]
+                            costs_ab = {key: value for key, value in costs_a.items() if key not in [a, b]}
+                            s_ab = sum([G.nodes[node][population] for node, c_v in costs_ab.items() if c_v <= c_ab])
+                            phi_ab = zeta * (m_a**2 * n_b) / ((m_a + s_ab) * (m_a + s_ab + n_b))
+                            
+                            # TODO: assuming only one shortest path each time
+                            path_ab = paths_a[b]
+                            path_eids = [G[i][j]['edge_id'] for i, j in zip(path_ab[:-1], path_ab[1:])]
+                            
+                            fluxes[(a, b)] = {'flux': phi_ab}
+                            paths[(a, b)] = {'edge_path': path_eids}
+                            costs[(a, b)] = {cost: c_ab}
+
+                            # calculate any extra costs
+                            for other_cost, other_cost_dict in other_costs.items():
+                                other_cost_dict[(a, b)] = nx.path_weight(G, path_ab, other_cost)
+    
+    path_df = pd.DataFrame.from_dict(paths, orient='index')
+    cost_df = pd.DataFrame.from_dict(costs, orient='index')
+    cost_other_df = pd.DataFrame.from_dict(other_costs, orient="columns")
+    flux_df = pd.DataFrame.from_dict(fluxes, orient='index')
+    df = pd.concat([path_df, cost_df, cost_other_df, flux_df], axis=1).reset_index()
+    df = df.rename(columns={'level_0': 'origin_id', 'level_1': 'destination_id'})
+
+    # NEW: truncate to only keep X% of the flux (written as thresh in [0, 1])
+    if thresh < 1:
+        df, *_ = truncate_by_threshold(df, threshold=thresh)
+    
+    return df
+
+
+def truncate_by_threshold(paths, flux_column='flux', threshold=.99):
+    """Truncate the dataframe of paths to one which still captures thresh% of the flux.
+    
+    Parameters:
+    -----------
+    paths : pd.Dataframe        Dataframe where each row is a path containing a flux columm.
+    """
+    print(f"Truncating paths with threshold {threshold * 100:.0f}%.")
+
+    paths_sorted = paths.reset_index(drop=True).sort_values(by=flux_column, ascending=False)
+    fluxes_sorted = paths_sorted[flux_column]
+    total_flux = fluxes_sorted.sum()
+    flux_percentiles = fluxes_sorted.cumsum() / total_flux
+    excess = flux_percentiles[flux_percentiles >= threshold]
+    cutoff = excess.idxmin()
+    keep = flux_percentiles[flux_percentiles <= threshold].index
+    paths_truncated = paths_sorted.loc[keep, :]
+
+    print(f"Number of paths before: {len(paths_sorted):,.0f}.")
+    print(f"Number of paths after: {len(paths_truncated):,.0f}.")
+    return paths_truncated, fluxes_sorted, flux_percentiles, keep, cutoff
 
 
 def test_traffic_assignment(roads_traffic, roads):
@@ -289,61 +415,6 @@ def plot_failed_edge_traffic(roads_disrupted, scenario_dict, edge_ix=0, buffer=1
         
     return fig
 
-@timeit
-def get_flux_data(G, cost, C, zeta, other_costs = [], population="population", pop_thresh=5, origin_class=None, dest_class=None, class_str=''):
-    """
-    TODO: replace nx.shortest_paths.single_source_dijkstra with a function that allows a list of targets.
-    
-    Estimate total traffic flows using radiation model and cost function on edges, based on [1].
-
-    Parameters:
-    -----------
-    origin_class : str
-        asserts all source nodes belong to specific class
-    dest_class : str
-        asserts all destination nodes belong to specific class
-    """
-
-    fluxes = {}
-    paths = {}
-    costs = {}
-    other_costs = {other_cost: {} for other_cost in other_costs}
-
-    for a in (pbar := tqdm(G.nodes, desc='processing paths from source nodes', total=G.number_of_nodes())):
-        if G.nodes[a].get(class_str) == origin_class:
-            m_a = G.nodes[a][population]
-            if m_a > pop_thresh:
-                # calculate each node's predecessors and its the cost of its shortest path to the source node
-                costs_a, paths_a = nx.shortest_paths.single_source_dijkstra(G, a, cutoff=C, weight=cost)
-                for b in paths_a.keys():
-                    if b != a and G.nodes[b].get(class_str) == dest_class:
-                        n_b = G.nodes[b][population]
-                        if n_b > pop_thresh:
-                            c_ab = costs_a[b]
-                            costs_ab = {key: value for key, value in costs_a.items() if key not in [a, b]}
-                            s_ab = sum([G.nodes[node][population] for node, c_v in costs_ab.items() if c_v <= c_ab])
-                            phi_ab = zeta * (m_a**2 * n_b) / ((m_a + s_ab) * (m_a + s_ab + n_b))
-                            
-                            # TODO: assuming only one shortest path each time
-                            path_ab = paths_a[b]
-                            path_eids = [G[i][j]['edge_id'] for i, j in zip(path_ab[:-1], path_ab[1:])]
-                            
-                            fluxes[(a, b)] = {'flux': phi_ab}
-                            paths[(a, b)] = {'edge_path': path_eids}
-                            costs[(a, b)] = {cost: c_ab}
-
-                            # calculate any extra costs
-                            for other_cost, other_cost_dict in other_costs.items():
-                                other_cost_dict[(a, b)] = nx.path_weight(G, path_ab, other_cost)
-    
-    path_df = pd.DataFrame.from_dict(paths, orient='index')
-    cost_df = pd.DataFrame.from_dict(costs, orient='index')
-    cost_other_df = pd.DataFrame.from_dict(other_costs, orient="columns")
-    flux_df = pd.DataFrame.from_dict(fluxes, orient='index')
-    df = pd.concat([path_df, cost_df, cost_other_df, flux_df], axis=1).reset_index()
-    df = df.rename(columns={'level_0': 'origin_id', 'level_1': 'destination_id'})
-    return df
-
 
 def get_flow_on_edges(save_paths_df, edge_id_column, edge_path_column, flow_column):
     """Get flows from paths onto edges
@@ -421,20 +492,6 @@ def get_flow_paths_indexes_of_edges(flow_dataframe, path_string):
     return edge_path_index
 
 
-def truncate_by_threshold(paths, flux_column='flux', threshold=.99):
-    print(f"Truncating paths with threshold {threshold * 100:.0f}%.")
-    paths_sorted = paths.reset_index(drop=True).sort_values(by=flux_column, ascending=False)
-    fluxes_sorted = paths_sorted[flux_column]
-    total_flux = fluxes_sorted.sum()
-    flux_percentiles = fluxes_sorted.cumsum() / total_flux
-    excess = flux_percentiles[flux_percentiles >= threshold]
-    cutoff = excess.idxmin()
-    keep = flux_percentiles[flux_percentiles <= threshold].index
-    paths_truncated = paths_sorted.loc[keep, :]
-    print(f"Number of paths before: {len(paths_sorted):,.0f}.")
-    print(f"Number of paths after: {len(paths_truncated):,.0f}.")
-    return paths_truncated, fluxes_sorted, flux_percentiles, keep, cutoff
-
 
 def plot_path_truncation(fluxes_sorted, flux_percentiles, cutoff, threshold):
     fig, axs = plt.subplots(1, 2, figsize=(10, 3))
@@ -460,7 +517,6 @@ def plot_path_truncation(fluxes_sorted, flux_percentiles, cutoff, threshold):
     ax.grid(False);
 
     plt.suptitle('Choice of cutoff based-on fluxes')
-    
     return fig
 
 @timeit
@@ -642,3 +698,37 @@ def igraph_scenario_edge_failures(network_df_in, edge_failure_set,
         warnings.warn("No paths affected by failed edges", RuntimeWarning)
 
     
+def get_origin_intersection(df1, df2, **kwargs):
+    """
+    Intersect origin points of all linestrings with poylgons.
+    
+    Parameters:
+    df1 : gpd.GeoDataframe
+        Geoataframe with geometry type LineString.
+    df2 : gpd.GeoDataframe
+    kwargs : 
+        keyword arguments for gpd.sjoin function.
+    """
+    df1['origin'] = df1.geometry.apply(lambda x: Point(x.coords[0]))
+    df1 = df1.set_geometry('origin')
+    df = gpd.sjoin_nearest(df1, df2, **kwargs)
+    df = df.set_geometry('geometry')
+    return df
+
+
+def get_dest_intersection(df1, df2, **kwargs):
+    """
+    Intersect origin points of all linestrings with poylgons.
+
+    Parameters:
+    df1 : gpd.GeoDataframe
+        Geoataframe with geometry type LineString.
+    df2 : gpd.GeoDataframe
+    kwargs : 
+        keyword arguments for gpd.sjoin function.
+    """
+    df1['dest'] = df1.geometry.apply(lambda x: Point(x.coords[-1]))
+    df1 = df1.set_geometry('dest')
+    df = gpd.sjoin_nearest(df1, df2, **kwargs)
+    df = df.set_geometry('geometry')
+    return df
