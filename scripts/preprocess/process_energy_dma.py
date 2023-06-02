@@ -18,6 +18,16 @@ from tqdm import tqdm
 tqdm.pandas()
 from utils import *
 
+def assign_node_function(x,source_types,sink_types):
+    if str(x.asset_type).lower() in source_types:
+        return "source"
+    elif str(x.asset_type).lower() in sink_types:
+        return "sink"
+    elif x.degree == 1:
+        return "sink"
+    else:
+        return "intermediate"
+
 def components(edges,nodes,node_id_col):
     G = networkx.Graph()
     G.add_nodes_from(
@@ -78,17 +88,6 @@ def get_od_nodes(nd,ty,plants,nodes):
         df = nodes
     return df[df[ty] == nd][["node_id","geometry"]]
 
-def closest_road_straightline(energy_node,road_nodes):
-    closest_road = ckdnearest(energy_node,
-                            road_nodes[["road_id","geometry"]])
-
-    st_line_geom = LineString([
-                energy_node.geometry.values[0],
-                road_nodes[road_nodes["road_id"] == closest_road["road_id"].values[0]
-                ].geometry.values[0]]
-                )
-    return closest_road, st_line_geom
-
 def merge_lines(single_linestrings):
     inlines = MultiLineString(single_linestrings)
     # Put the sub-line coordinates into a list of sublists
@@ -103,6 +102,9 @@ def merge_lines(single_linestrings):
 def main(config):
     incoming_data_path = config['paths']['incoming_data']
     processed_data_path = config['paths']['data']
+
+    source_types = ["diesel","geothermal","hydro","solar"] 
+    sink_types = ["substation"]
 
     plants_substations = gpd.read_file(os.path.join(incoming_data_path,"dominica_electricalnet","electricPS.shp"))
     plants_substations.columns = map(str.lower, plants_substations.columns)
@@ -135,6 +137,8 @@ def main(config):
 
     edges["asset_type"] = edges["asset_type"].astype(str).str.replace("nan","dummy")
     nodes["asset_type"] = nodes["asset_type"].astype(str).str.replace("nan","dummy")
+    nodes["function_type"] = nodes.progress_apply(lambda x:assign_node_function(x,source_types,sink_types),axis=1)
+
     gpd.GeoDataFrame(edges,
             geometry="geometry",
             crs="EPSG:32620").to_file(os.path.join(processed_data_path,

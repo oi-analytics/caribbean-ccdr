@@ -39,7 +39,7 @@ def main(config):
     #                     "data_layers",
     #                     "infrastructure_layers.csv"))
     countries = ["dma","grd","lca","vct"]
-    # countries = ["dma"]
+    countries = ["lca"]
     sectors = {
                 "transport":["roads","ports","airports"],
                 "energy":["energy"],

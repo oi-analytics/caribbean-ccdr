@@ -91,8 +91,11 @@ def main(config,country,hazard_names,direct_damages_folder,
                                             "asset_layer","exposure_unit",
                                             "damage_cost_unit"] + hazard_cols + ["exposure"],["damage"])
                         damage = damage[damage["damage_amax"]>0]
+                        for hk in ["amin","mean","amax"]:     
+                            damage[f"exposure_{hk}"] = damage["exposure"]*np.where(damage[f"damage_{hk}"]>0,1,0)
+                        damage.drop("exposure",axis=1,inplace=True)
                         asset_damages.append(damage)
-                        sum_dict = dict([("exposure","sum")]+[(f"damage_{hk}","sum") for hk in ["amin","mean","amax"]])
+                        sum_dict = dict([(f"exposure_{hk}","sum") for hk in ["amin","mean","amax"]]+[(f"damage_{hk}","sum") for hk in ["amin","mean","amax"]])
                         total_damage = damage.groupby(["sector","subsector",
                                             "asset_layer","exposure_unit",
                                             "damage_cost_unit"] + hazard_cols,
@@ -113,19 +116,19 @@ def main(config,country,hazard_names,direct_damages_folder,
 	        asset_damages = pd.concat(asset_damages,axis=0,ignore_index=True)
 	        sector_damages = pd.concat(sector_damages,axis=0,ignore_index=True)
 	        damage_sensitivity = pd.concat(damage_sensitivity,axis=0,ignore_index=True)
-	        # asset_damages.to_parquet(os.path.join(summary_results,
-	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.parquet"),index=False)
-	        # sector_damages.to_parquet(os.path.join(summary_results,
-	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages.parquet"),index=False)
-	        # damage_sensitivity.to_parquet(os.path.join(summary_results,
-	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_damage_sensitivity.parquet"),index=False)
+	        asset_damages.to_parquet(os.path.join(summary_results,
+	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.parquet"),index=False)
+	        sector_damages.to_parquet(os.path.join(summary_results,
+	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages.parquet"),index=False)
+	        damage_sensitivity.to_parquet(os.path.join(summary_results,
+	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_damage_sensitivity.parquet"),index=False)
 
-	        asset_damages.to_csv(os.path.join(summary_results,
-	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.csv"),index=False)
-	        sector_damages.to_csv(os.path.join(summary_results,
-	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages.csv"),index=False)
-	        damage_sensitivity.to_csv(os.path.join(summary_results,
-	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_damage_sensitivity.csv"),index=False)
+	        # asset_damages.to_csv(os.path.join(summary_results,
+	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.csv"),index=False)
+	        # sector_damages.to_csv(os.path.join(summary_results,
+	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages.csv"),index=False)
+	        # damage_sensitivity.to_csv(os.path.join(summary_results,
+	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_damage_sensitivity.csv"),index=False)
 
         print (f"* Done with {asset_info.asset_gpkg} {asset_info.asset_layer}")
 

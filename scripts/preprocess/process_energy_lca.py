@@ -100,12 +100,24 @@ def merge_lines(single_linestrings):
 
     return outline
 
+def assign_node_function(x,source_types,sink_types):
+    if str(x.asset_type).lower() in source_types:
+        return "source"
+    elif str(x.asset_type).lower() in sink_types:
+        return "sink"
+    else:
+        return "intermediate"
+
 def main(config):
     incoming_data_path = config['paths']['incoming_data']
     processed_data_path = config['paths']['data']
 
+    source_types = ["diesel","geothermal","hydro","solar"] 
+    sink_types = ["substation"]
+    
     plants_substations = gpd.read_file(os.path.join(incoming_data_path,"st_lucia_energy","stlucelectricity.shp"))
     plants_substations.rename(columns={"type":"asset_type"},inplace=True)
+    plants_substations["function_type"] = plants_substations.progress_apply(lambda x:assign_node_function(x,source_types,sink_types),axis=1)
     plants_substations = plants_substations.to_crs(epsg=32620)
 
     poles = gpd.read_file(os.path.join(incoming_data_path,"st_lucia_energy","66Poles.shp"))
@@ -148,6 +160,7 @@ def main(config):
 
     nodes["POLE_LABEL"] = nodes["POLE_LABEL"].astype(str)
     nodes["asset_type"] = np.where(nodes["asset_type"] == "pole","pole","dummy")
+    nodes["function_type"] = nodes.progress_apply(lambda x:assign_node_function(x,source_types,sink_types),axis=1)
 
     """ To check if some poles were not included. Not needed
     blank_nodes = nodes[nodes["POLE_LABEL"] == 'nan']
