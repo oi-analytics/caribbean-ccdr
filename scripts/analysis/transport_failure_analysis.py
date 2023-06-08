@@ -17,11 +17,18 @@ from tqdm import tqdm
 from geospatial_utils import load_config
 import transport_flow_and_disruption_functions as tfdf
 
+# set country using command likne
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--country', type=str, help='what country to run script on', default='LCA')
+parser.add_argument('--thresh', type=int, help='max time to consider for paths', default=60)
+args = parser.parse_args()
+COUNTRY= args.country
+THRESH = args.thresh
+print(f'Processing road data for country: {COUNTRY}')
 
 # global settings
-COUNTRY = 'LCA'
 COST = 'time_m'
-THRESH = 30
 TRUNC_THRESH = .95
 ZETA = 1
 RECALCULATE_PATHS = True
@@ -37,7 +44,7 @@ def main(CONFIG):
     roads, road_net = tfdf.get_roads(os.path.join(datadir, 'infrastructure', 'transport'), COUNTRY, EDGE_ATTRS)
 
     # step 1: get path and flux dataframe and save
-    pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_pathdata_{COST}_{THRESH}')
+    pathname = os.path.join(resultsdir, 'transport', 'path and flux data', 'gen', f'{COUNTRY}_pathdata_{COST}_{THRESH}')
     if RECALCULATE_PATHS:
         path_df = tfdf.get_flux_data(road_net, COST, THRESH, ZETA, other_costs=['length_m'], thresh=TRUNC_THRESH)
         path_df.to_parquet(path=f"{pathname}.parquet", index=True)
