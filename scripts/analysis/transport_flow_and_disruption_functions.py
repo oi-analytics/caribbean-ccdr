@@ -167,7 +167,7 @@ def process_school_fluxes(roads, road_net, schools, admin_areas, resultsdir, COU
 
 
 def process_school_fluxes_new(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH):
-    pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_schools_pathdata_{COST}_{THRESH}')
+    pathname = os.path.join(resultsdir, 'transport', 'path and flux data', 'schools', f'{COUNTRY}_schools_pathdata_{COST}_{THRESH}')
 
     if RECALCULATE_PATHS:
         # assign domestic classes for road network
@@ -193,7 +193,7 @@ def process_school_fluxes_new(roads, road_net, schools, admin_areas, resultsdir,
         
         # calculate paths from households to schools
         paths_df = []
-        for district in admin_areas['school_district'].unique():
+        for district in schools['school_district'].unique():
             print(district)
             path_df = get_flux_data(road_net, COST, THRESH, ZETA, origin_class=f"domestic_{district}", dest_class=f"school_{district}", class_str='class')
             path_df.loc[:, 'school_district'] = district
@@ -201,6 +201,7 @@ def process_school_fluxes_new(roads, road_net, schools, admin_areas, resultsdir,
         paths_df = pd.concat(paths_df)
         paths_df, *_ = truncate_by_threshold(paths_df, threshold=TRUNC_THRESH)
         paths_df.to_parquet(path=f"{pathname}.parquet", index=True)
+        print(f"\n\nSaved path file as {pathname}.parquet\n")
     else:
         paths_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
 

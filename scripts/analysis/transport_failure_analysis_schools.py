@@ -17,8 +17,16 @@ import pandas as pd
 import geopandas as gpd
 from geospatial_utils import load_config
 from num2words import num2words
+import warnings
 import transport_flow_and_disruption_functions as tfdf
 
+# set country using command likne
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--country', type=str, help='what country to run script on', default='LCA')
+args = parser.parse_args()
+COUNTRY= args.country
+print(f'Processing school data for country: {COUNTRY}')
 
 # global settings
 COST = 'time_m'
@@ -28,7 +36,6 @@ ZETA = 1
 EDGE_ATTRS = ['edge_id', 'length_m', 'time_m']
 RECALCULATE_PATHS = True
 RECALCULATE_TRAFFIC = False
-COUNTRY = 'DMA'
 plot_kwargs = {'dpi': 400, 'bbox_inches': 'tight'}
 caribbean_epsg = 32620
 
@@ -49,7 +56,7 @@ def main(CONFIG):
         admin_areas.loc[:, "DIS"] = admin_areas.apply(lambda x: str(num2words(x["DIS"])).title(), axis=1)
         admin_areas.rename(columns={"DIS": "school_district"},inplace=True)
     elif COUNTRY == "VCT":
-        admin_areas = gpd.read_file(os.path.join(datadir, 'admin_boundaries', f'{COUNTRY.lower()}_edu_districts.gpkg'))[["SCHOOL_DIST","geometry"]]
+        admin_areas = gpd.read_file(os.path.join(datadir, 'infrastructure', 'social', f'{COUNTRY.lower()}_edu_districts.gpkg'))[["SCHOOL_DIST","geometry"]]
         admin_areas["SCHOOL_DIST"] = admin_areas.apply(lambda x: str(num2words(x["SCHOOL_DIST"])).title(),axis=1)
         admin_areas.rename(columns={"SCHOOL_DIST": "school_district"},inplace=True)
     elif COUNTRY == "GRD":
@@ -60,16 +67,18 @@ def main(CONFIG):
         admin_areas = gpd.read_file(os.path.join(indir, 'admin_boundaries', f'gadm41_{COUNTRY}.gpkg'), layer='ADM_ADM_1')
         admin_areas.rename(columns={"NAME_1": "school_district"}, inplace=True)
 
-    # TODO: GRD and DMA
     admin_areas = admin_areas.to_crs(epsg=caribbean_epsg)
     admin_areas.loc[:, "school_district"] = admin_areas["school_district"].astype(str).str.replace("Saint","St.")
 
-    import pdb; pdb.set_trace()
-    assert set(admin_areas['school_district'].unique()) == set(schools['school_district'].unique()), "School districts do not match"
+    if set(admin_areas['school_district'].unique()) != set(schools['school_district'].unique()):
+        warnings.warn("\n\nSchool districts do not match. View variables or enter 'c' to continue.\n")
+        import pdb; pdb.set_trace()
+
     # step 1: get path and flux dataframe and save
     # path_df, school_road_net, roads_by_district = tfdf.process_school_fluxes(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH)
     path_df, *_ = tfdf.process_school_fluxes_new(roads, road_net, schools, admin_areas, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH)
     
+    import pdb; pdb.set_trace()
     # path_df.describe()  # max time to get to any school: 40.79 mins, min: 0 mins
 
     # step 2: model disruption

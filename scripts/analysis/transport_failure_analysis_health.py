@@ -25,11 +25,9 @@ import transport_flow_and_disruption_functions as tfdf
 
 # set country using command likne
 import argparse
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--country', type=str, help='what country to run script on', default='LCA')
 args = parser.parse_args()
-
 COUNTRY= args.country
 print(f'Processing health data for country: {COUNTRY}')
 
