@@ -194,12 +194,10 @@ def process_school_fluxes_new(roads, road_net, schools, admin_areas, resultsdir,
         # calculate paths from households to schools
         paths_df = []
         for district in admin_areas['school_district'].unique():
+            print(district)
             path_df = get_flux_data(road_net, COST, THRESH, ZETA, origin_class=f"domestic_{district}", dest_class=f"school_{district}", class_str='class')
             path_df.loc[:, 'school_district'] = district
             paths_df.append(path_df)
-        path_df = pd.concat(paths_df)
-        path_df, *_ = truncate_by_threshold(path_df, threshold=TRUNC_THRESH)
-
         paths_df = pd.concat(paths_df)
         paths_df, *_ = truncate_by_threshold(paths_df, threshold=TRUNC_THRESH)
         paths_df.to_parquet(path=f"{pathname}.parquet", index=True)
@@ -214,6 +212,7 @@ def process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, TH
     node_geoms = {node: Point(line.coords[-1]) for node, line in zip(roads['to_node'], roads['geometry'])}
     node_geoms = node_geoms | {node: Point(line.coords[0]) for node, line in zip(roads['from_node'], roads['geometry']) if node not in node_geoms.keys()}
     nodes_gdf = gpd.GeoDataFrame.from_dict(node_geoms, orient='index').reset_index().rename(columns={'index': 'node', 0: 'geometry'}).set_geometry('geometry')
+    nodes_gdf = nodes_gdf.set_crs(roads.crs)
 
     # find nearest nodes to each school building
     health['nearest_node'] = health.apply(lambda row: get_nearest_values(row, nodes_gdf, 'node'), axis=1)
@@ -232,7 +231,7 @@ def process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, TH
     test_pop_assignment(road_net, nearest_nodes, rename_health, 'bed_capacity')
 
     # get path and flux dataframe and save
-    pathname = os.path.join(resultsdir, 'transport', 'path and flux data', f'{COUNTRY}_health_pathdata_{COST}_{THRESH}')
+    pathname = os.path.join(resultsdir, 'transport', 'path and flux data','health', f'{COUNTRY}_health_pathdata_{COST}_{THRESH}')
     if RECALCULATE_PATHS:
         paths_df = get_flux_data(road_net, COST, THRESH, ZETA, origin_class='domestic', dest_class='hospital', class_str='class', thresh=TRUNC_THRESH)
         paths_df.to_parquet(path=f"{pathname}.parquet", index=True)
@@ -287,7 +286,6 @@ def get_flux_data(G, cost, C, zeta, other_costs = [], population="population", p
                             # calculate any extra costs
                             for other_cost, other_cost_dict in other_costs.items():
                                 other_cost_dict[(a, b)] = nx.path_weight(G, path_ab, other_cost)
-    
     path_df = pd.DataFrame.from_dict(paths, orient='index')
     cost_df = pd.DataFrame.from_dict(costs, orient='index')
     cost_other_df = pd.DataFrame.from_dict(other_costs, orient="columns")

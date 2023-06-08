@@ -19,7 +19,7 @@ import transport_flow_and_disruption_functions as tfdf
 
 
 # global settings
-COUNTRY = 'GRD'
+COUNTRY = 'LCA'
 COST = 'time_m'
 THRESH = 30
 TRUNC_THRESH = .95
@@ -44,6 +44,8 @@ def main(CONFIG):
         print(f"Paths data saved as {pathname}.parquet.")
     else:
         path_df = pd.read_parquet(path=f"{pathname}.parquet", engine="fastparquet")
+
+    import pdb; pdb.set_trace()
 
     # step 2: model disruption
     outdir = os.path.join(resultsdir, "transport", "disruption results")

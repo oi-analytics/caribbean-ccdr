@@ -23,9 +23,17 @@ from geospatial_utils import load_config
 from analysis_utils import get_nearest_values
 import transport_flow_and_disruption_functions as tfdf
 
+# set country using command likne
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--country', type=str, help='what country to run script on', default='LCA')
+args = parser.parse_args()
+
+COUNTRY= args.country
+print(f'Processing health data for country: {COUNTRY}')
 
 # global settings
-COUNTRY = 'LCA'
 COST = 'time_m'
 THRESH = 60
 TRUNC_THRESH = 1
@@ -43,6 +51,7 @@ def main(CONFIG):
 
     # load roads
     roads, road_net = tfdf.get_roads(os.path.join(datadir, 'infrastructure', 'transport'), COUNTRY, EDGE_ATTRS)
+    roads = roads.to_crs(caribbean_epsg)
 
     # load health data
     health = gpd.read_file(os.path.join(datadir, 'infrastructure', 'social', f'{COUNTRY.lower()}_health.gpkg'))
@@ -51,6 +60,7 @@ def main(CONFIG):
 
     # step 1: get path and flux dataframe and save
     path_df, road_net = tfdf.process_health_fluxes(roads, road_net, health, resultsdir, COUNTRY, COST, THRESH, ZETA, RECALCULATE_PATHS, TRUNC_THRESH)
+    import pdb; pdb.set_trace()
 
     # step 2: model disruption
     outfile = os.path.join(resultsdir, "transport", "disruption results", f"{COUNTRY.lower()}_health_roads_edges_sector_damages_with_rerouting")
