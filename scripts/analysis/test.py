@@ -17,15 +17,15 @@ def main(config):
     countries = ["lca"]
     hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","chaz_cyclones"]
 
-    # file_name = "lca_roads_splits__charim_landslide_lca__edges.geoparquet"
-    # df = gpd.read_parquet(os.path.join(results_path,"hazard_asset_intersections",file_name))
-    # print (df)
-    # df.to_csv("test.csv",index=False)
+    file_name = "lca_energy_splits__chaz_cyclones_lca__areas.geoparquet"
+    df = gpd.read_parquet(os.path.join(results_path,"hazard_asset_intersections",file_name))
+    print (df)
+    df.to_csv("test.csv",index=False)
 
-    df = gpd.read_file(os.path.join(processed_data_path,"infrastructure","transport","lca_airports.gpkg"),layer="areas")
-    df["area"] = df.geometry.area
-    print (df[["node_id","area"]])
-    print (949212.16/df["area"].sum())
+    # df = gpd.read_file(os.path.join(processed_data_path,"infrastructure","transport","lca_airports.gpkg"),layer="areas")
+    # df["area"] = df.geometry.area
+    # print (df[["node_id","area"]])
+    # print (949212.16/df["area"].sum())
                                 
 if __name__ == '__main__':
     CONFIG = load_config()

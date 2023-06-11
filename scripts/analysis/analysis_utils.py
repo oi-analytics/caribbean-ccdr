@@ -27,6 +27,13 @@ def load_config():
         config = json.load(config_fh)
     return config
 
+def modify_epoch(hazard_dataframe,baseline_year):
+    if "epoch" not in hazard_dataframe.columns.values.tolist():
+        hazard_dataframe["epoch"] = baseline_year
+
+    hazard_dataframe["epoch"] = hazard_dataframe["epoch"].fillna(baseline_year)
+    hazard_dataframe.loc[hazard_dataframe["epoch"] < baseline_year,"epoch"] = baseline_year
+    return hazard_dataframe
 
 def gdf_geom_clip(gdf_in, clip_geom):
     """Filter a dataframe to contain only features within a clipping geometry

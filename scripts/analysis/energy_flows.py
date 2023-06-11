@@ -65,7 +65,7 @@ def main(config):
                     sinks_df.append(sinks[["node_id","geometry"]])
 
                 if len(sources.index) > 0:   
-                    sources_df.append(sources[["node_id","capacity_mw"]])
+                    sources_df.append(sources[["node_id","asset_type","capacity_mw"]])
             if sinks_df and sources_df:
                 sinks_df = gpd.GeoDataFrame(
                                 pd.concat(sinks_df,axis=0,ignore_index=True),
@@ -87,12 +87,12 @@ def main(config):
                                             "node_id",
                                             country_boundary,
                                             epsg=caribbean_epsg)
-                gpd.GeoDataFrame(energy_voronoi,geometry="geometry",crs=f"EPSG:{caribbean_epsg}").to_file(
-                                    os.path.join(
-                                            voronoi_path,
-                                            f"{country}_energy_voronoi.gpkg"
-                                        ),
-                                    layer="areas",driver="GPKG")
+                # gpd.GeoDataFrame(energy_voronoi,geometry="geometry",crs=f"EPSG:{caribbean_epsg}").to_file(
+                #                     os.path.join(
+                #                             voronoi_path,
+                #                             f"{country}_energy_voronoi.gpkg"
+                #                         ),
+                #                     layer="areas",driver="GPKG")
 
                 # Write the voronoi file path to a csv file
                 write_to_file(f"infrastructure/energy/energy_voronoi/{country}_energy_voronoi.gpkg","path",
@@ -147,12 +147,12 @@ def main(config):
 
                 energy_voronoi = pd.merge(energy_voronoi,energy_pop_intersections,how="left",on=[energy_id_column]).fillna(0)
                 energy_voronoi[energy_pop_column] = access*energy_voronoi[energy_pop_column]
-                gpd.GeoDataFrame(energy_voronoi,geometry="geometry",crs=f"EPSG:{caribbean_epsg}").to_file(
-                                    os.path.join(
-                                            voronoi_path,
-                                            f"{country}_energy_voronoi.gpkg"
-                                        ),
-                                    layer="areas",driver="GPKG")
+                # gpd.GeoDataFrame(energy_voronoi,geometry="geometry",crs=f"EPSG:{caribbean_epsg}").to_file(
+                #                     os.path.join(
+                #                             voronoi_path,
+                #                             f"{country}_energy_voronoi.gpkg"
+                #                         ),
+                #                     layer="areas",driver="GPKG")
                 print("* Done with estimating JRC population assinged to each voronoi area in energy network")
                 # Delete the intersections file to re-run Voronoi population assignment
                 os.remove(os.path.join(voronoi_path,
@@ -162,7 +162,7 @@ def main(config):
                 edges = gpd.read_file(read_gpkg,layer="edges")[['from_node','to_node','edge_id']]
                 sources_df.rename(columns={"node_id":"origin_id"},inplace=True)
                 energy_voronoi.rename(columns={"node_id":"destination_id"},inplace=True)
-                od_matrix = sources_df[["origin_id","capacity_mw"]].merge(energy_voronoi[["destination_id",energy_pop_column]], how='cross')
+                od_matrix = sources_df[["origin_id","asset_type","capacity_mw"]].merge(energy_voronoi[["destination_id",energy_pop_column]], how='cross')
                 
                 # od_matrix = pd.DataFrame([(x,y) for x in sources_df.iterrows() for y in energy_voronoi.iterrows()],columns=['origin_id','destination_id'])
                 
@@ -171,6 +171,7 @@ def main(config):
                 all_paths = network_ods_assembly(od_matrix,edges,
                                 None,["capacity_mw",energy_pop_column],directed=False,
                                 file_output_path=os.path.join(energy_flow_path,f"{country}_energy_paths.parquet"))
+                # all_paths.to_csv(os.path.join(energy_flow_path,f"{country}_energy_paths.csv"),index=False)
                 print ('Total number of paths',len(all_paths.index))
 
 

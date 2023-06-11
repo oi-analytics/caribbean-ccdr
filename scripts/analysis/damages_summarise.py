@@ -25,14 +25,16 @@ def quantiles(dataframe,grouping_by_columns,grouped_columns):
 def main(config,country,hazard_names,direct_damages_folder,
         summary_results_folder,
         network_csv,
-        parameter_txt_file):
+        parameter_txt_file,
+        development_scenario):
 
     processed_data_path = config['paths']['data']
     output_data_path = config['paths']['results']
     
-    direct_damages_results = os.path.join(output_data_path,direct_damages_folder)
+    direct_damages_results = os.path.join(output_data_path,
+                        f"{direct_damages_folder}_{development_scenario}")
 
-    summary_results = os.path.join(output_data_path,summary_results_folder)
+    summary_results = os.path.join(output_data_path,f"{summary_results_folder}_{development_scenario}")
     if os.path.exists(summary_results) == False:
         os.mkdir(summary_results)
 
@@ -50,7 +52,7 @@ def main(config,country,hazard_names,direct_damages_folder,
         asset_damages_results = os.path.join(direct_damages_results,f"{asset_info.asset_gpkg}_{asset_info.asset_layer}")
 
         asset_damages = []
-        sector_damages = []
+        # sector_damages = []
         damage_sensitivity = []
         for hazard_name in hazard_names:
             # Process the exposure and damage results
@@ -58,6 +60,7 @@ def main(config,country,hazard_names,direct_damages_folder,
                                                         "hazards",
                                                         f"{hazard_name}_{country}.csv"),
                                                 encoding="latin1")
+            hazard_data_details = modify_epoch(hazard_data_details,2023)
             hazard_data_details.columns = hazard_data_details.columns.str.replace('-', '_')
             hazard_cols = [c for c in hazard_data_details.columns.values.tolist() if c not in ["fname","key"]]
             damage_files = [os.path.join(
@@ -86,49 +89,48 @@ def main(config,country,hazard_names,direct_damages_folder,
                                                 dropna=False).agg(sum_dict).reset_index()
                         damage_sensitivity.append(damage_param_sums)
                         del damage_param_sums
+                        quan_hazard_cols = [h for h in hazard_cols if h != "precipitation_factor"]
                         damage = quantiles(damage,
                                             [asset_id,"sector","subsector",
                                             "asset_layer","exposure_unit",
-                                            "damage_cost_unit"] + hazard_cols + ["exposure"],["damage"])
+                                            "damage_cost_unit"] + quan_hazard_cols + ["exposure"],["damage"])
                         damage = damage[damage["damage_amax"]>0]
                         for hk in ["amin","mean","amax"]:     
                             damage[f"exposure_{hk}"] = damage["exposure"]*np.where(damage[f"damage_{hk}"]>0,1,0)
                         damage.drop("exposure",axis=1,inplace=True)
                         asset_damages.append(damage)
-                        sum_dict = dict([(f"exposure_{hk}","sum") for hk in ["amin","mean","amax"]]+[(f"damage_{hk}","sum") for hk in ["amin","mean","amax"]])
-                        total_damage = damage.groupby(["sector","subsector",
-                                            "asset_layer","exposure_unit",
-                                            "damage_cost_unit"] + hazard_cols,
-                                            dropna=False).agg(sum_dict).reset_index()
-                        for hk in ["amin","mean","amax"]:
-                            df = damage[damage[f"damage_{hk}"]>0]
-                            df = df.groupby(["sector","subsector",
-                                            "asset_layer","exposure_unit",
-                                            "damage_cost_unit"] + hazard_cols)[asset_id].apply(list).reset_index(name=f"asset_set_{hk}")
-                            total_damage = pd.merge(total_damage,df,how="left", on=["sector","subsector",
-                                                                                    "asset_layer","exposure_unit",
-                                                                                    "damage_cost_unit"] + hazard_cols)
-                            del df
+                        # sum_dict = dict([(f"exposure_{hk}","sum") for hk in ["amin","mean","amax"]]+[(f"damage_{hk}","sum") for hk in ["amin","mean","amax"]])
+                        # total_damage = damage.groupby(["sector","subsector",
+                        #                     "asset_layer","exposure_unit",
+                        #                     "damage_cost_unit"] + hazard_cols,
+                        #                     dropna=False).agg(sum_dict).reset_index()
+                        # for hk in ["amin","mean","amax"]:
+                        #     df = damage[damage[f"damage_{hk}"]>0]
+                        #     df = df.groupby(["sector","subsector",
+                        #                     "asset_layer","exposure_unit",
+                        #                     "damage_cost_unit"] + hazard_cols)[asset_id].apply(list).reset_index(name=f"asset_set_{hk}")
+                        #     total_damage = pd.merge(total_damage,df,how="left", on=["sector","subsector",
+                        #                                                             "asset_layer","exposure_unit",
+                        #                                                             "damage_cost_unit"] + hazard_cols)
+                        #     del df
                         
-                        sector_damages.append(total_damage)
+                        # sector_damages.append(total_damage)
 
         if asset_damages:
 	        asset_damages = pd.concat(asset_damages,axis=0,ignore_index=True)
-	        sector_damages = pd.concat(sector_damages,axis=0,ignore_index=True)
+	        # sector_damages = pd.concat(sector_damages,axis=0,ignore_index=True)
 	        damage_sensitivity = pd.concat(damage_sensitivity,axis=0,ignore_index=True)
-	        asset_damages.to_parquet(os.path.join(summary_results,
-	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.parquet"),index=False)
-	        sector_damages.to_parquet(os.path.join(summary_results,
-	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages.parquet"),index=False)
-	        damage_sensitivity.to_parquet(os.path.join(summary_results,
-	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_damage_sensitivity.parquet"),index=False)
+	        # asset_damages.to_parquet(os.path.join(summary_results,
+	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.parquet"),index=False)
+	        # sector_damages.to_parquet(os.path.join(summary_results,
+	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages.parquet"),index=False)
+	        # damage_sensitivity.to_parquet(os.path.join(summary_results,
+	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_damage_sensitivity.parquet"),index=False)
 
-	        # asset_damages.to_csv(os.path.join(summary_results,
-	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.csv"),index=False)
-	        # sector_damages.to_csv(os.path.join(summary_results,
-	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages.csv"),index=False)
-	        # damage_sensitivity.to_csv(os.path.join(summary_results,
-	        #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_damage_sensitivity.csv"),index=False)
+	        asset_damages.to_csv(os.path.join(summary_results,
+	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.csv"),index=False)
+	        damage_sensitivity.to_csv(os.path.join(summary_results,
+	                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_damage_sensitivity.csv"),index=False)
 
         print (f"* Done with {asset_info.asset_gpkg} {asset_info.asset_layer}")
 
@@ -141,6 +143,7 @@ if __name__ == "__main__":
         summary_results_folder = str(sys.argv[4])
         network_csv = str(sys.argv[5])
         parameter_txt_file = str(sys.argv[6])
+        development_scenario = str(sys.argv[7]) 
     except IndexError:
         print("Got arguments", sys.argv)
         exit()
@@ -148,4 +151,4 @@ if __name__ == "__main__":
     main(CONFIG,country,hazard_names,direct_damages_folder,
         summary_results_folder,
         network_csv,
-        parameter_txt_file)
+        parameter_txt_file,development_scenario)
