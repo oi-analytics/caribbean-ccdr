@@ -86,6 +86,12 @@ def get_rehab_costs(x, rehab_costs):
     
     return float(cost_min[0]) , float(cost_max[0]) , str(cost_unit[0])
 
+def add_asset_type(x):
+    if x.bridge == "yes":
+        return "bridge"
+    else:
+        return x.road_cond
+
 def main(config):
     incoming_data_path = config['paths']['incoming_data']
     processed_data_path = config['paths']['data']
@@ -214,36 +220,48 @@ def main(config):
     # print("Done.")
                        
     # Did not assign is code to roads file. Need to do that
-    edges = gpd.read_file(os.path.join(processed_data_path,
-                            "infrastructure/transport",
-                            "roads.gpkg"), 
-                    layer='edges')
-    nodes = gpd.read_file(os.path.join(processed_data_path,
-                            "infrastructure/transport",
-                            "roads.gpkg"), 
-                    layer='nodes')
+    # edges = gpd.read_file(os.path.join(processed_data_path,
+    #                         "infrastructure/transport",
+    #                         "roads.gpkg"), 
+    #                 layer='edges')
+    # nodes = gpd.read_file(os.path.join(processed_data_path,
+    #                         "infrastructure/transport",
+    #                         "roads.gpkg"), 
+    #                 layer='nodes')
 
-    nodes_iso = list(set(list(
-                    zip(
-                        edges["from_node"].values.tolist(),
-                        edges["iso_code"].values.tolist()
-                        )
-                    ) + list(
-                            zip(
-                                edges["to_node"].values.tolist(),
-                                edges["iso_code"].values.tolist()
-                                )
-                        )
-                    )
-                )
-    nodes_iso = pd.DataFrame(nodes_iso,columns=["node_id","iso_code"])
-    nodes = pd.merge(nodes,nodes_iso,how="left",on=["node_id"])
-    gpd.GeoDataFrame(nodes,
-                geometry="geometry",
-                crs="EPSG:4326").to_file(os.path.join(processed_data_path,
-                            "infrastructure/transport",
-                            "roads.gpkg"), 
-                    layer='nodes', driver='GPKG')
+    # nodes_iso = list(set(list(
+    #                 zip(
+    #                     edges["from_node"].values.tolist(),
+    #                     edges["iso_code"].values.tolist()
+    #                     )
+    #                 ) + list(
+    #                         zip(
+    #                             edges["to_node"].values.tolist(),
+    #                             edges["iso_code"].values.tolist()
+    #                             )
+    #                     )
+    #                 )
+    #             )
+    # nodes_iso = pd.DataFrame(nodes_iso,columns=["node_id","iso_code"])
+    # nodes = pd.merge(nodes,nodes_iso,how="left",on=["node_id"])
+    # gpd.GeoDataFrame(nodes,
+    #             geometry="geometry",
+    #             crs="EPSG:4326").to_file(os.path.join(processed_data_path,
+    #                         "infrastructure/transport",
+    #                         "roads.gpkg"), 
+    #                 layer='nodes', driver='GPKG')
+
+    countries = ['dma','grd','lca','vct']
+    for country in countries:
+        edges = gpd.read_file(os.path.join(processed_data_path,
+                                "infrastructure/transport",
+                                f"{country}_roads.gpkg"), 
+                        layer='edges')
+        edges["asset_type"] = edges.progress_apply(lambda x:add_asset_type(x),axis=1)
+        edges.to_file(os.path.join(processed_data_path,
+                                "infrastructure/transport",
+                                f"{country}_roads.gpkg"), 
+                        layer='edges',driver="GPKG")  
 
 if __name__ == '__main__':
     CONFIG = load_config()

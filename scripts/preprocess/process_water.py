@@ -40,7 +40,7 @@ def main(config):
 
         lca_df = lca_df.to_crs(epsg=caribbean_crs)
         lca_df.rename(columns={"Capacity":"capacity_m3d",
-                            "Access Value":"capacity_m3d",
+                            "Treatment Value":"capacity_m3d",
                             "% Population":"capacity_percentage"},
                         inplace=True)
         lca_df["asset_type"] = asset_type

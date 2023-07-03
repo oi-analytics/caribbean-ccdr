@@ -511,9 +511,9 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
         total_time = ((1 - path_df_disrupted["no_access"]) * path_df_disrupted[COST]).sum()
         
         agg_kwargs= {
-                    "trips_lost": ("lost_flux", sum),                                           # total #trips lost (i.e., #people)
+                    "trips_disrupted": ("lost_flux", sum),                                           # total #trips lost (i.e., #people)
                     "trips_rerouted": ("rerouted_flux", sum),                                   # total #trips rerouted (i.e., #people)
-                    "%trips_lost": ("lost_flux", sum),                                          # %trips lost, divide by number of paths below
+                    "%trips_disrupted": ("lost_flux", sum),                                          # %trips lost, divide by number of paths below
                     f"{COST}_delta": (f"delta_{COST}", sum),                                    # total increase in COST over network
                     f"{COST}_delta_mean": (f"delta_{COST}", np.mean),
                     f"%{COST}_delta": (f'perc_delta_{COST}', np.mean),                          # average % increase in COST over rerouted paths: TODO: check this
@@ -523,7 +523,7 @@ def model_disruption(edge_fail_ids, paths_df, road_net, edge_flow_path_indices, 
         aggregated_disruption = path_df_disrupted.groupby(['failed_edges'])[["lost_flux","rerouted_flux","no_access", f"delta_{COST}", f"perc_delta_{COST}", f"rerouting_loss_person_{COST}"]].agg(**agg_kwargs)
         
         # get percentages right
-        aggregated_disruption["%trips_lost"] = np.round(100 * (aggregated_disruption["%trips_lost"] / total_flux ), 4)
+        aggregated_disruption["%trips_disrupted"] = np.round(100 * (aggregated_disruption["%trips_disrupted"] / total_flux ), 4)
         aggregated_disruption[f"%{COST}_delta"] = np.round(100 * aggregated_disruption[f"%{COST}_delta"], 4)
         aggregated_disruption[f"%{COST}_delta_total"] = np.round(100 * (aggregated_disruption[f"{COST}_delta"] / total_time), 4)
 

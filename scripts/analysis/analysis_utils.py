@@ -627,17 +627,20 @@ def network_ods_assembly(points_dataframe,graph_dataframe,cost_criteria,attribut
     cols = [
         'origin_id', 'destination_id', 'node_path', 'edge_path'
     ]
-    save_paths_df = pd.DataFrame(save_paths, columns=cols)
-    save_paths_df = save_paths_df[save_paths_df.node_path.apply(lambda x: x != [])]
-    # print (save_paths_df)
-    if attribute_columns:
-        points_dataframe = points_dataframe.reset_index()
-        save_paths_df = pd.merge(save_paths_df, points_dataframe, how='left', on=[
-                                 'origin_id', 'destination_id']).fillna(0)
+    if save_paths:
+        save_paths_df = pd.DataFrame(save_paths, columns=cols)
+        save_paths_df = save_paths_df[save_paths_df.node_path.apply(lambda x: x != [])]
+        # print (save_paths_df)
+        if attribute_columns:
+            points_dataframe = points_dataframe.reset_index()
+            save_paths_df = pd.merge(save_paths_df, points_dataframe, how='left', on=[
+                                     'origin_id', 'destination_id']).fillna(0)
 
-        save_paths_df = save_paths_df[save_paths_df['origin_id'] != 0]
-    if file_output_path:
-        save_paths_df.to_parquet(file_output_path, index=False)
-    del save_paths
+            save_paths_df = save_paths_df[save_paths_df['origin_id'] != 0]
+        if file_output_path:
+            save_paths_df.to_parquet(file_output_path, index=False)
+        del save_paths
 
-    return save_paths_df
+        return save_paths_df
+    else:
+        return pd.DataFrame()

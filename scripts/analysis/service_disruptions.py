@@ -59,8 +59,9 @@ def buildings_and_points_disruptions(building_df,asset_service_df,building_servi
 
         for i in ["amin","mean","amax"]:
             building_df[f"{bs}_disrupted_{i}"] = (building_df[f"exposure_{i}"]/building_df["asset_area"])*building_df[bs]
+            if "asset_fix" in building_df.columns.values.tolist():
+                building_df[f"{bs}_disrupted_{i}"] = np.where(building_df["asset_fix"] == 1, 0, building_df[f"{bs}_disrupted_{i}"])
             service_disruption_columns.append(f"{bs}_disrupted_{i}")
-
     sector_effects = add_disruptions(building_df,service_disruption_columns,hazard_columns)
 
     percentage_disruptions = []
@@ -97,7 +98,7 @@ def energy_service_path_indexes(energy_service_df):
 
     return node_path_indexes, edge_path_indexes
 
-def energy_disruptions(asset_failure_set,supply_loss_set,failure_year,energy_service_df,
+def energy_disruptions(asset_failure_set,supply_loss_set,failure_year,energy_edges,energy_service_df,
                         service_growth_df,
                         supply_column,service_column):
     
@@ -125,19 +126,35 @@ def energy_disruptions(asset_failure_set,supply_loss_set,failure_year,energy_ser
             failed_service_df = energy_service_df[energy_service_df.index.isin(failure_indexes)]
             if failed_supply == total_supply:
                 return total_service, 100.0
-            elif len(failed_demand_nodes) == list(set(energy_service_df["destination_id"].values.tolist())):
+            elif len(failed_demand_nodes) == len(list(set(energy_service_df["destination_id"].values.tolist()))):
                 return total_service, 100.0
             else:
                 if sum(supply_loss_set) > 0:
                     failed_supply_df = pd.DataFrame(list(zip(asset_failure_set,supply_loss_set)),columns=["origin_id","capacity_loss"])
                     failed_supply_df = failed_supply_df[failed_supply_df["capacity_loss"]>0]
-                    energy_service_df = pd.merge(energy_service_df,failed_supply_df,how="left",on=["origin_id"])
+                    energy_service_df = pd.merge(energy_service_df,failed_supply_df,how="left",on=["origin_id"]).fillna(0)
                     energy_service_df["supply"] = energy_service_df[supply_column] - energy_service_df["capacity_loss"] 
+                    # print (energy_service_df)
                 else:
                     energy_service_df["supply"] = energy_service_df[supply_column].copy()
-                remaining_service_df = energy_service_df[~energy_service_df.index.isin(failure_indexes)]
-                remaining_service_df = remaining_service_df.groupby(["destination_id","assigned_service"])["supply"].sum().reset_index()
-                disrupted_service = total_service - sum((1.0*remaining_service_df["supply"]/total_supply)*remaining_service_df["assigned_service"])
+                
+                supply_df = energy_service_df[["origin_id",supply_column,"supply"]].drop_duplicates(subset=["origin_id"], keep="first")
+                demand_df = energy_service_df[["destination_id","assigned_service"]].drop_duplicates(subset=["destination_id"], keep="first")
+                od_matrix = supply_df.merge(demand_df, how='cross')
+                od_matrix = od_matrix[~(od_matrix.origin_id.isin(asset_failure_set) | od_matrix.destination_id.isin(asset_failure_set))]
+                # del supply_df, demand_df
+                edges = energy_edges[~energy_edges["edge_id"].isin(asset_failure_set)]
+                edges = edges[~(edges["from_node"].isin(asset_failure_set) | edges["to_node"].isin(asset_failure_set))]
+                # print (edges)
+                remaining_service_df = network_ods_assembly(od_matrix,edges,
+                                None,["supply","assigned_service"],directed=False)
+                # remaining_service_df = energy_service_df[~energy_service_df.index.isin(failure_indexes)]
+                if len(remaining_service_df.index) > 0:
+                    # print (remaining_service_df)
+                    remaining_service_df = remaining_service_df.groupby(["destination_id","assigned_service"])["supply"].sum().reset_index()
+                    disrupted_service = total_service - sum((1.0*remaining_service_df["supply"]/total_supply)*remaining_service_df["assigned_service"])
+                else:
+                    disrupted_service = total_service*(supply_df[supply_column].sum())/total_supply
                 return disrupted_service, 100.0*disrupted_service/total_service
         else:
             return 0, 0.0
@@ -214,7 +231,8 @@ def main(config,country,hazard_names,direct_damages_folder,
         damages_service_folder,
         network_csv,
         service_csv,
-        development_scenario):
+        development_scenario,
+        adaptation_scenario):
 
     processed_data_path = config['paths']['data']
     output_data_path = config['paths']['results']
@@ -248,25 +266,33 @@ def main(config,country,hazard_names,direct_damages_folder,
                             f"future_scenario_{development_scenario}"
                             ]/service_scenarios.iloc[0][f"future_scenario_bau"]
         
-        damage_file = os.path.join(
-                                    direct_damages_results,
-                                    f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.csv"
-                                    )
+        if adaptation_scenario == "no_adaptation":
+            damage_file = os.path.join(
+                                        direct_damages_results,
+                                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.csv"
+                                        )
+        else:
+            damage_file = os.path.join(
+                                        direct_damages_results,
+                                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.csv"
+                                        )
+
+
         if os.path.isfile(damage_file) is True:
             # damage_results = pd.read_parquet(damage_file)
             damage_results = pd.read_csv(damage_file)
             # damage_results = modify_epoch(damage_results,baseline_year)
             # replicate and add landslides 
-            landslide = damage_results[damage_results["hazard"] == "landslide"]
-            landslides = [landslide]
-            for epoch in [2030,2050]:
-                l = landslide.copy()
-                l["epoch"] = epoch
-                landslides.append(l)
-            landslides = pd.concat(landslides,axis=0,ignore_index=True)
-            damage_results = damage_results[damage_results["hazard"] != "landslide"]
-            damage_results = pd.concat([damage_results,landslides],axis=0,ignore_index=True)
-            del landslide, l, landslides
+            # landslide = damage_results[damage_results["hazard"] == "landslide"]
+            # landslides = [landslide]
+            # for epoch in [2030,2050]:
+            #     l = landslide.copy()
+            #     l["epoch"] = epoch
+            #     landslides.append(l)
+            # landslides = pd.concat(landslides,axis=0,ignore_index=True)
+            # damage_results = damage_results[damage_results["hazard"] != "landslide"]
+            # damage_results = pd.concat([damage_results,landslides],axis=0,ignore_index=True)
+            # del landslide, l, landslides
             asset_service_df = gpd.read_file(os.path.join(
                                         processed_data_path,
                                         "infrastructure",
@@ -335,6 +361,7 @@ def main(config,country,hazard_names,direct_damages_folder,
                                     f'{country.upper()}_pathdata_time_m_30_truncated.parquet'),
                                     index=False)
                 """
+                hazard_columns = [h for h in damage_results.columns.values.tolist() if h in hazard_names]
                 for hk in ["amin","mean","amax"]:
                     damage_results[
                             f"exposure_{hk}_percentage"
@@ -354,6 +381,9 @@ def main(config,country,hazard_names,direct_damages_folder,
                                     dropna=False).agg(exposure_damage_dict).reset_index()
                 for hk in ["amin","mean","amax"]:
                     df = damage_results[damage_results[f"damage_{hk}"]>0]
+                    if "asset_fix" in damage_results.columns.values.tolist():
+                        df = df[df["asset_fix"] == 0]
+                    # print (df)
                     df = df.groupby(["sector","subsector",
                                     "exposure_unit",
                                     "damage_cost_unit"] + hazard_columns,dropna=False)[asset_id].apply(list).reset_index(name=f"asset_set_{hk}")
@@ -361,13 +391,14 @@ def main(config,country,hazard_names,direct_damages_folder,
                                                                             "exposure_unit",
                                                                             "damage_cost_unit"] + hazard_columns)
                     del df
+                # disruption_df.to_csv("test.csv")
                 del damage_results
                 path_types = [
                                 "health_pathdata_time_m_60.parquet",
                                 "schools_pathdata_time_m_60.parquet",
                                 "pathdata_time_m_30_truncated.parquet"]
                 truncate = [False,True,False]
-                disrupt_dfs = []
+                path_dfs = []
                 total_trips = 0
                 for idx,(pt,tr) in enumerate(zip(path_types,truncate)): 
                     path_df = pd.read_parquet(os.path.join(output_data_path,
@@ -379,16 +410,18 @@ def main(config,country,hazard_names,direct_damages_folder,
                         path_df, *_ = tfdf.truncate_by_threshold(path_df, threshold=0.99)
                     path_df["flux"] = demand_change_factor*path_df["flux"]
                     total_trips += path_df['flux'].sum()
-                    # step 2: model disruption
-                    loss_df = tfdf.get_disruption_stats(disruption_df.copy(), path_df,road_net, COST)
-                    loss_df.drop([f"asset_set_{hk}" for hk in ["amin","mean","amax"]],axis=1,inplace=True)
-                    disrupt_dfs.append(loss_df)
-                    del loss_df, path_df
+                    path_dfs.append(path_df)
+                
+                path_dfs = pd.concat(path_dfs,axis=0,ignore_index=True)
 
-                disrupt_dfs = pd.concat(disrupt_dfs,axis=0,ignore_index=True)
+                # step 2: model disruption
+                disrupt_dfs = tfdf.get_disruption_stats(disruption_df.copy(), path_dfs,road_net, COST)
+                disrupt_dfs.drop([f"asset_set_{hk}" for hk in ["amin","mean","amax"]],axis=1,inplace=True)
+                # del loss_df, path_df
+
                 trip_loss_dict = dict(
                                 [
-                                    (f"trips_lost_{hk}","sum") for hk in ["amin","mean","amax"]
+                                    (f"trips_disrupted_{hk}","sum") for hk in ["amin","mean","amax"]
                                 ]+ [
                                     (f"trips_rerouted_{hk}","sum") for hk in ["amin","mean","amax"]
                                 ]+ [
@@ -400,8 +433,8 @@ def main(config,country,hazard_names,direct_damages_folder,
                                         dropna=False).agg(trip_loss_dict).reset_index()
                 for hk in ["amin","mean","amax"]:
                     disrupt_dfs[
-                            f"trips_lost_{hk}_percentage"
-                            ] = 100.0*disrupt_dfs[f"trips_lost_{hk}"]/total_trips
+                            f"trips_disrupted_{hk}_percentage"
+                            ] = 100.0*disrupt_dfs[f"trips_disrupted_{hk}"]/total_trips
                     disrupt_dfs[
                             f"trips_rerouted_{hk}_percentage"
                             ] = 100.0*disrupt_dfs[f"trips_rerouted_{hk}"]/total_trips
@@ -415,22 +448,23 @@ def main(config,country,hazard_names,direct_damages_folder,
                                                         service_data_details["asset_gpkg"] == asset_info.asset_gpkg
                                                         ])
                 for hk in ["amin","mean","amax"]:
-                    disruption_df[f"trips_lost_{hk}"] = (
+                    disruption_df[f"trips_disrupted_{hk}"] = (
                                                     (1 + 0.01*disruption_df["growth_rate_percent"]
                                                     )**(disruption_df["epoch"] - disruption_df["service_year"])
-                                                )*disruption_df[f"trips_lost_{hk}"]
+                                                )*disruption_df[f"trips_disrupted_{hk}"]
                     disruption_df[f"trips_rerouted_{hk}"] = (
                                                     (1 + 0.01*disruption_df["growth_rate_percent"]
                                                     )**(disruption_df["epoch"] - disruption_df["service_year"])
                                                 )*disruption_df[f"trips_rerouted_{hk}"]
                 disruption_df.drop(["growth_rate_percent","service_year"],axis=1,inplace=True)
                 disruption_df.to_csv(os.path.join(damages_service_results,
-                            f"{country}_roads_sector_damages_losses.csv"),index=False)
+                            f"{country}_roads_edges_sector_damages_losses.csv"),index=False)
 
             elif asset_info.service_disruption_level == "asset":
                 hazard_columns = [h for h in damage_results.columns.values.tolist() if h in hazard_names]
                 service_columns = get_service_columns(asset_service_df,asset_service_columns)
                 asset_service_df = asset_service_df[[asset_id, "asset_area"] + service_columns]
+                asset_service_df[service_columns] = asset_service_df[service_columns].fillna(0)
                 asset_service_df[service_columns] = demand_change_factor*asset_service_df[service_columns]
                 asset_service_df = add_service_year_and_growth_rates(
                                             asset_service_df,
@@ -448,6 +482,13 @@ def main(config,country,hazard_names,direct_damages_folder,
                             f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages_losses.csv"),index=False)
 
     if energy_sector_results:
+        energy_edges = gpd.read_file(os.path.join(
+                                        processed_data_path,
+                                        "infrastructure",
+                                        "energy",
+                                        f"{country}_energy.gpkg"),
+                                    layer="edges")[['from_node','to_node','edge_id']]
+
         energy_sector_results = pd.concat(energy_sector_results,axis=0,ignore_index=True)
         energy_flow_df = pd.read_parquet(os.path.join(
                                 output_data_path,
@@ -470,17 +511,30 @@ def main(config,country,hazard_names,direct_damages_folder,
         del energy_flow_df
         energy_sector_results["disruption_unit"] = "customers/day"
         hazard_columns = [h for h in energy_sector_results.columns.values.tolist() if h in hazard_names]
+        # sum_dict = dict(
+        #                 [(hk,"sum") for hk in energy_sector_results.columns.values.tolist() if "_exposure_" in hk
+        #                 ]+[(f"damage_{hk}","sum") for hk in ["amin","mean","amax"]
+        #                 ]+[(f"generation_capacity_loss_{hk}","sum") for hk in ["amin","mean","amax"]]
+        #                 )
         sum_dict = dict(
                         [(hk,"sum") for hk in energy_sector_results.columns.values.tolist() if "_exposure_" in hk
                         ]+[(f"damage_{hk}","sum") for hk in ["amin","mean","amax"]
-                        ]+[(f"generation_capacity_loss_{hk}","sum") for hk in ["amin","mean","amax"]]
-                        )
+                        ])
         total_disruption = energy_sector_results.groupby(["sector","subsector",
                         "damage_cost_unit",
                         "disruption_unit"] + hazard_columns,
                         dropna=False).agg(sum_dict).reset_index()
         for hk in ["amin","mean","amax"]:
             df = energy_sector_results[energy_sector_results[f"damage_{hk}"]>0]
+            if "asset_fix" in df.columns.values.tolist():
+                df = df[df["asset_fix"] == 0]
+            
+            df0 = df.groupby(["sector","subsector",
+                        "damage_cost_unit",
+                        "disruption_unit"] + hazard_columns,
+                        dropna=False).agg(
+                        dict([(f"generation_capacity_loss_{hk}","sum")])).reset_index()
+            # breakpoint()
             df1 = df.groupby(["sector","subsector",
                             "damage_cost_unit",
                             "disruption_unit"] + hazard_columns,dropna=False)["asset_id"].apply(list).reset_index(name=f"asset_set_{hk}")
@@ -489,6 +543,10 @@ def main(config,country,hazard_names,direct_damages_folder,
                             "disruption_unit"] + hazard_columns,dropna=False)[f"generation_capacity_loss_{hk}"].apply(list).reset_index(name=f"generation_set_{hk}")
             # df1['precipitation_factor'] = df1['precipitation_factor'].astype(total_disruption['precipitation_factor'].dtype)
             # df2['precipitation_factor'] = df2['precipitation_factor'].astype(total_disruption['precipitation_factor'].dtype)
+            for c in df0.columns.values.tolist():
+                if c in total_disruption.columns.values.tolist():
+                    df0[c] = df0[c].astype(total_disruption[c].dtype)
+
             for c in df1.columns.values.tolist():
                 if c in total_disruption.columns.values.tolist():
                     df1[c] = df1[c].astype(total_disruption[c].dtype)
@@ -497,22 +555,24 @@ def main(config,country,hazard_names,direct_damages_folder,
                 if c in total_disruption.columns.values.tolist():
                     df2[c] = df2[c].astype(total_disruption[c].dtype)
 
-
+            total_disruption = pd.merge(total_disruption,df0,how="left", on=["sector","subsector",
+                                                                    "damage_cost_unit","disruption_unit"] + hazard_columns)
             total_disruption = pd.merge(total_disruption,df1,how="left", on=["sector","subsector",
                                                                     "damage_cost_unit","disruption_unit"] + hazard_columns)
             total_disruption = pd.merge(total_disruption,df2,how="left", on=["sector","subsector",
                                                                     "damage_cost_unit","disruption_unit"] + hazard_columns)
-            del df, df1, df2
+            del df, df0, df1, df2
             total_disruption["customer_losses"] = total_disruption.progress_apply(
                                                 lambda x:energy_disruptions(
                                                     x[f"asset_set_{hk}"],x[f"generation_set_{hk}"],x["epoch"],
+                                                    energy_edges,
                                                     flow_dfs[flow_dfs["epoch"] == x.epoch],
                                                     service_data_details[
                                                         service_data_details["asset_gpkg"] == asset_info.asset_gpkg
                                                         ],
                                                     "modified_capacity","pop_2020"),
                                                 axis=1)
-            total_disruption[[f"customer_losses_{hk}",f"customer_losses_{hk}_percentage"]] = total_disruption["customer_losses"].apply(pd.Series)
+            total_disruption[[f"customers_disrupted_{hk}",f"customers_disrupted_{hk}_percentage"]] = total_disruption["customer_losses"].apply(pd.Series)
             total_disruption.drop(["customer_losses"],axis=1,inplace=True)
             total_disruption.drop([f"asset_set_{hk}",f"generation_set_{hk}"],axis=1,inplace=True)
         
@@ -532,6 +592,7 @@ if __name__ == "__main__":
         network_csv = str(sys.argv[5])
         service_csv = str(sys.argv[6])
         development_scenario = str(sys.argv[7])
+        adaptation_scenario = str(sys.argv[8])
     except IndexError:
         print("Got arguments", sys.argv)
         exit()
@@ -540,4 +601,4 @@ if __name__ == "__main__":
         damages_service_folder,
         network_csv,
         service_csv,
-        development_scenario)
+        development_scenario,adaptation_scenario)

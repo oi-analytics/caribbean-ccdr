@@ -187,8 +187,11 @@ def main(config,country,hazard_name,results_folder,
                                                             )
                                                         ]
                             damaged_assets = list(set(damages_df['asset_name'].values.tolist()))
-                            if asset_info.asset_gpkg == "energy" and asset_info.asset_layer in ("nodes","areas"):
-                                asset_df = add_costs(asset_df,country,
+                            # if asset_info.asset_gpkg == "energy" and asset_info.asset_layer in ("nodes","areas"):
+                            #     asset_df = add_costs(asset_df,country,
+                            #                             asset_sector,asset_info.asset_gpkg,
+                            #                             asset_info.asset_layer,["rehabilitation"],epoch,development_scenario)
+                            asset_df = add_costs(asset_df,country,
                                                         asset_sector,asset_info.asset_gpkg,
                                                         asset_info.asset_layer,["rehabilitation"],epoch,development_scenario)
                             asset_df['damage_cost'] = asset_df[asset_min_cost] + cost_uncertainty_parameter*(
