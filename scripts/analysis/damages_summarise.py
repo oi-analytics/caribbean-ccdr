@@ -22,7 +22,7 @@ def quantiles(dataframe,grouping_by_columns,grouped_columns):
     
     return grouped
 
-def main(config,country,hazard_names,direct_damages_folder,
+def main(config,country,hazard_names,hazard_columns,direct_damages_folder,
         summary_results_folder,
         network_csv,
         parameter_txt_file,
@@ -103,17 +103,17 @@ def main(config,country,hazard_names,direct_damages_folder,
                         #                     [asset_id,"sector","subsector",
                         #                     "asset_layer","exposure_unit",
                         #                     "damage_cost_unit"] + quan_hazard_cols + ["exposure"],["damage"])
-                        # damage = damage[damage["damage_amax"]>0]
-                        # for hk in ["amin","mean","amax"]:     
+                        # damage = damage[damage["damage_max"]>0]
+                        # for hk in ["min","mean","max"]:     
                         #     damage[f"exposure_{hk}"] = damage["exposure"]*np.where(damage[f"damage_{hk}"]>0,1,0)
                         # damage.drop("exposure",axis=1,inplace=True)
                         asset_damages.append(damage)
-                        # sum_dict = dict([(f"exposure_{hk}","sum") for hk in ["amin","mean","amax"]]+[(f"damage_{hk}","sum") for hk in ["amin","mean","amax"]])
+                        # sum_dict = dict([(f"exposure_{hk}","sum") for hk in ["min","mean","max"]]+[(f"damage_{hk}","sum") for hk in ["min","mean","max"]])
                         # total_damage = damage.groupby(["sector","subsector",
                         #                     "asset_layer","exposure_unit",
                         #                     "damage_cost_unit"] + hazard_cols,
                         #                     dropna=False).agg(sum_dict).reset_index()
-                        # for hk in ["amin","mean","amax"]:
+                        # for hk in ["min","mean","max"]:
                         #     df = damage[damage[f"damage_{hk}"]>0]
                         #     df = df.groupby(["sector","subsector",
                         #                     "asset_layer","exposure_unit",
@@ -128,13 +128,14 @@ def main(config,country,hazard_names,direct_damages_folder,
         if asset_damages:
             asset_damages = pd.concat(asset_damages,axis=0,ignore_index=True)
             # sector_damages = pd.concat(sector_damages,axis=0,ignore_index=True)
-            quan_hazard_cols = [h for h in hazard_cols if h != "precipitation_factor"]
+            # quan_hazard_cols = [h for h in hazard_cols if h != "precipitation_factor"]
             asset_damages = quantiles(asset_damages,
                                 [asset_id,"sector","subsector",
                                 "asset_layer","exposure_unit",
-                                "damage_cost_unit"] + quan_hazard_cols + ["exposure"],["damage"])
-            asset_damages = asset_damages[asset_damages["damage_amax"]>0]
-            for hk in ["amin","mean","amax"]:     
+                                "damage_cost_unit"] + hazard_columns + ["exposure"],["damage"])
+            # print (asset_damages)
+            asset_damages = asset_damages[asset_damages["damage_max"]>0]
+            for hk in ["min","mean","max"]:     
                 asset_damages[f"exposure_{hk}"] = asset_damages["exposure"]*np.where(asset_damages[f"damage_{hk}"]>0,1,0)
             asset_damages.drop("exposure",axis=1,inplace=True)
 
@@ -182,16 +183,18 @@ if __name__ == "__main__":
     try:
         country =  str(sys.argv[1])
         hazard_names = ast.literal_eval(str(sys.argv[2]))
-        direct_damages_folder = str(sys.argv[3])
-        summary_results_folder = str(sys.argv[4])
-        network_csv = str(sys.argv[5])
-        parameter_txt_file = str(sys.argv[6])
-        development_scenario = str(sys.argv[7]) 
+        hazard_columns = ast.literal_eval(str(sys.argv[3]))
+        direct_damages_folder = str(sys.argv[4])
+        summary_results_folder = str(sys.argv[5])
+        network_csv = str(sys.argv[6])
+        parameter_txt_file = str(sys.argv[7])
+        development_scenario = str(sys.argv[8]) 
     except IndexError:
         print("Got arguments", sys.argv)
         exit()
 
-    main(CONFIG,country,hazard_names,direct_damages_folder,
+    main(CONFIG,country,hazard_names,hazard_columns,
+        direct_damages_folder,
         summary_results_folder,
         network_csv,
         parameter_txt_file,development_scenario)

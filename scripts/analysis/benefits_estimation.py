@@ -91,7 +91,7 @@ def main(config,country,
 
 
 
-            loss_columns = [c for c in no_adapt_sector_loss_df.columns.values.tolist() if "_amin" in c or "_mean" in c or "_amax" in c]
+            loss_columns = [c for c in no_adapt_sector_loss_df.columns.values.tolist() if "_min" in c or "_mean" in c or "_max" in c]
             index_columns = [c for c in no_adapt_sector_loss_df.columns.values.tolist() if c not in loss_columns]
             # damage_columns = [c for c in no_adapt_sector_loss_df.columns.values.toist() if "exposure_" in c or "damage_" in c]
             # service_columns = [c for c in loss_columns if c not in damage_columns]
@@ -101,7 +101,7 @@ def main(config,country,
             # print (index_columns)
             with_adapt_asset_costs_df = with_adapt_asset_costs_df[with_adapt_asset_costs_df["asset_fix"] == 1]
             sum_dict = dict([
-                            (f"adaptation_investment_{hk}","sum") for hk in ["amin","mean","amax"]
+                            (f"adaptation_investment_{hk}","sum") for hk in ["min","mean","max"]
                             ])
             idx_columns = [c for c in with_adapt_asset_costs_df.columns.values.tolist() if c in index_columns]
             with_adapt_asset_costs_df = with_adapt_asset_costs_df.groupby(
@@ -123,12 +123,12 @@ def main(config,country,
                                             with_adapt_sector_loss_df],
                                             axis=0,ignore_index=True)
             no_adapt_sector_loss_df.drop("existing_asset_adaptation_implemented",axis=1,inplace=True)
-            for hk in ["amin","mean","amax"]:
+            for hk in ["min","mean","max"]:
                 with_adapt_sector_loss_df[
                         f"adaptation_investment_{hk}"
                         ] = with_adapt_sector_loss_df[f"adaptation_investment_{hk}"].fillna(0)
 
-            for hk in ["amin","mean","amax"]:
+            for hk in ["min","mean","max"]:
                 if len(asset_service_columns) > 1:
                     slc = "weighted_service_disrupted"
                     no_adapt_sector_loss_df[
@@ -151,7 +151,7 @@ def main(config,country,
                         f"service_resilience_achieved_{hk}_percentage"
                         ] = 100.0 - with_adapt_sector_loss_df[f"{slc}_{hk}_percentage"]
 
-            loss_columns = [c for c in no_adapt_sector_loss_df.columns.values.tolist() if "_amin" in c or "_mean" in c or "_amax" in c]
+            loss_columns = [c for c in no_adapt_sector_loss_df.columns.values.tolist() if "_min" in c or "_mean" in c or "_max" in c]
             rename_dict = dict([
                             (f"{c}",f"no_adaptation_{c}") for c in loss_columns
                             ])
@@ -200,19 +200,19 @@ def main(config,country,
                             ])
             with_adapt_sector_loss_df.rename(columns=rename_dict,inplace=True)
 
-            loss_columns = [c for c in with_adapt_sector_loss_df.columns.values.tolist() if "_amin" in c or "_mean" in c or "_amax" in c]
+            loss_columns = [c for c in with_adapt_sector_loss_df.columns.values.tolist() if "_min" in c or "_mean" in c or "_max" in c]
             index_columns = [c for c in with_adapt_sector_loss_df.columns.values.tolist() if c not in loss_columns]
 
-            unique_loss_columns = list(set([c.replace("_amin","").replace("_mean","").replace("_amax","") for c in loss_columns]))
+            unique_loss_columns = list(set([c.replace("_min","").replace("_mean","").replace("_max","") for c in loss_columns]))
             for uc in unique_loss_columns:
-                if f"{uc}_amin" in loss_columns:
-                    min_col = f"{uc}_amin"
-                    max_col = f"{uc}_amax"
-                    del_cols = [f"{uc}_amin",f"{uc}_mean"]
+                if f"{uc}_min" in loss_columns:
+                    min_col = f"{uc}_min"
+                    max_col = f"{uc}_max"
+                    del_cols = [f"{uc}_min",f"{uc}_mean"]
                 else:
-                    min_col = f"{uc.replace('_percentage','')}_amin_percentage"
-                    max_col = f"{uc.replace('_percentage','')}_amax_percentage"
-                    del_cols = [f"{uc.replace('_percentage','')}_amin_percentage",f"{uc.replace('_percentage','')}_mean_percentage"]
+                    min_col = f"{uc.replace('_percentage','')}_min_percentage"
+                    max_col = f"{uc.replace('_percentage','')}_max_percentage"
+                    del_cols = [f"{uc.replace('_percentage','')}_min_percentage",f"{uc.replace('_percentage','')}_mean_percentage"]
                 if with_adapt_sector_loss_df[min_col].equals(with_adapt_sector_loss_df[max_col]):
                     with_adapt_sector_loss_df.rename(columns={max_col:uc},inplace=True)
                     with_adapt_sector_loss_df.drop(del_cols,axis=1,inplace=True)
@@ -247,12 +247,12 @@ def main(config,country,
                 installed_capacities = pd.merge(installed_capacities,costs,how="left")
                 del costs
                 installed_capacities[
-                        "construction_cost_amin"
+                        "construction_cost_min"
                         ] = installed_capacities[
                                 f"{development_scenario}_capacity_mw_new"
                                 ]*installed_capacities["cost_min"]
                 installed_capacities[
-                        "construction_cost_amax"
+                        "construction_cost_max"
                         ] = installed_capacities[
                                 f"{development_scenario}_capacity_mw_new"
                                 ]*installed_capacities["cost_max"]
@@ -260,9 +260,9 @@ def main(config,country,
                         "construction_cost_mean"
                         ] = 0.5*(
                                 installed_capacities[
-                                    "construction_cost_amin"
+                                    "construction_cost_min"
                                     ] + installed_capacities[
-                                        "construction_cost_amax"]
+                                        "construction_cost_max"]
                                 )
 
                 installed_capacities = pd.merge(installed_capacities
@@ -271,13 +271,13 @@ def main(config,country,
                                         right_on=["asset_name"]).fillna(0)
 
                 installed_capacities[
-                        [f"new_build_resilience_investment_{hk}" for hk in ["amin","mean","amax"]]
+                        [f"new_build_resilience_investment_{hk}" for hk in ["min","mean","max"]]
                             ] = installed_capacities[
-                                    [f"construction_cost_{hk}" for hk in ["amin","mean","amax"]]
+                                    [f"construction_cost_{hk}" for hk in ["min","mean","max"]]
                                 ].multiply(installed_capacities["cost_uplift"],axis="index")
                 installed_capacities = installed_capacities.groupby(
                                         ["hazard","epoch"]
-                                        )[[f"new_build_resilience_investment_{hk}" for hk in ["amin","mean","amax"]]].sum().reset_index()
+                                        )[[f"new_build_resilience_investment_{hk}" for hk in ["min","mean","max"]]].sum().reset_index()
                 with_adapt_sector_loss_df = pd.merge(with_adapt_sector_loss_df,
                                         installed_capacities,
                                         how="left",on=["hazard","epoch"]).fillna(0)
@@ -289,11 +289,11 @@ def main(config,country,
             #                 os.path.join(combined_results,
             #                 f"{country}_{asset_info.asset_gpkg}_adaptation_{development_scenario}.csv"),index=False)
             with_adapt_sector_loss_df = with_adapt_sector_loss_df.drop_duplicates(subset=
-                index_columns + ["damage_amax",
+                index_columns + ["damage_max",
                 "service_resilience_achieved_percentage"],keep="first")
             with_adapt_sector_loss_df[
-            		index_columns + investment_columns + remaining_columns
-            		].to_excel(writer,sheet_name=development_scenario,index=False)
+                    index_columns + investment_columns + remaining_columns
+                    ].to_excel(writer,sheet_name=development_scenario,index=False)
             writer.close()
 
 if __name__ == "__main__":

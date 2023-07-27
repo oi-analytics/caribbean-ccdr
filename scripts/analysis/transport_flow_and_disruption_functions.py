@@ -456,7 +456,7 @@ def plot_path_truncation(fluxes_sorted, flux_percentiles, cutoff, threshold):
 
 @timeit
 def get_disruption_stats(disruption_df, path_df, road_net, COST):
-        all_fail_lists = disruption_df[['asset_set_amin', 'asset_set_mean', 'asset_set_amax']].to_numpy().flatten()     # get all damaged road combinations
+        all_fail_lists = disruption_df[['asset_set_min', 'asset_set_mean', 'asset_set_max']].to_numpy().flatten()     # get all damaged road combinations
         all_fail_lists = [np.array(x, dtype='object') for x in set(tuple(x) for x in all_fail_lists if x is not np.nan)]  # reduce to all unique lists of damaged edges
         edge_flow_path_indices = get_flow_paths_indexes_of_edges(path_df, 'edge_path')
 
@@ -470,20 +470,20 @@ def get_disruption_stats(disruption_df, path_df, road_net, COST):
                 print("Aggregating disruption stats...")
                 path_df_disrupted, aggregated_disruption = result[0], result[1]
                 # all dataframe indices where this failure combo occurs
-                min_idx = disruption_df[disruption_df['asset_set_amin'].apply(lambda x: str(x) == str(list(fail_list)))].index
+                min_idx = disruption_df[disruption_df['asset_set_min'].apply(lambda x: str(x) == str(list(fail_list)))].index
                 mean_idx = disruption_df[disruption_df['asset_set_mean'].apply(lambda x: str(x) == str(list(fail_list)))].index
-                max_idx = disruption_df[disruption_df['asset_set_amax'].apply(lambda x: str(x) == str(list(fail_list)))].index
+                max_idx = disruption_df[disruption_df['asset_set_max'].apply(lambda x: str(x) == str(list(fail_list)))].index
                 # assign results to correct rows and columns
                 for column in aggregated_disruption.columns:
                     if first_loop: # set up columns, probs not the most elegant way to do this
-                        disruption_df[f'{column}_amin'] = [0.] * len(disruption_df)
+                        disruption_df[f'{column}_min'] = [0.] * len(disruption_df)
                         disruption_df[f'{column}_mean'] = [0.] * len(disruption_df)
-                        disruption_df[f'{column}_amax'] = [0.] * len(disruption_df)
+                        disruption_df[f'{column}_max'] = [0.] * len(disruption_df)
                         first_loop = False
                     value = aggregated_disruption[column].iloc[0]
-                    disruption_df.loc[min_idx, f'{column}_amin'] = value
+                    disruption_df.loc[min_idx, f'{column}_min'] = value
                     disruption_df.loc[mean_idx, f'{column}_mean'] = value
-                    disruption_df.loc[max_idx, f'{column}_amax'] = value
+                    disruption_df.loc[max_idx, f'{column}_max'] = value
             # import pdb; pdb.set_trace()
         return disruption_df
 

@@ -70,8 +70,7 @@ def energy_cost_multiplier(x,cost_label,x_layer):
     else:
         return x[cost_label],x["cost_unit"]
 
-def add_energy_costs(energy_df,cost_df,energy_layer,cost_type="rehab"):
-    energy_crs = energy_df.crs
+def add_energy_costs(energy_df,cost_df,energy_layer,cost_type="rehab",geometry_type=True):
     cost_df["asset_type"] = cost_df["asset_type"].str.lower()
     
     energy_df = pd.merge(energy_df,cost_df,
@@ -87,8 +86,11 @@ def add_energy_costs(energy_df,cost_df,energy_layer,cost_type="rehab"):
                                             axis=1)
     energy_df[[f"{cost_type}_cost_max",f"{cost_type}_cost_unit"]] = energy_df[f"{cost_type}_costs"].apply(pd.Series)
     energy_df.drop(["cost_unit",f"{cost_type}_costs"],axis=1,inplace=True)
-
-    return gpd.GeoDataFrame(energy_df,geometry="geometry",crs=energy_crs)
+    if geometry_type is True:
+        energy_crs = energy_df.crs
+        return gpd.GeoDataFrame(energy_df,geometry="geometry",crs=energy_crs)
+    else:
+        return energy_df
 
 def add_water_costs(water_df,cost_df,cost_type="rehab"):
     water_crs = water_df.crs
@@ -106,6 +108,36 @@ def add_area_costs(area_df,cost_df,cost_type="rehab"):
     area_df[f"{cost_type}_cost_unit"] = "US$/sq-m"
 
     return area_df
+
+def add_installed_capacity_costs(country,sector,subsector,cost_types,time_epoch,scenario):
+    processed_data_path = load_config()['paths']['data']
+    for cost_type in cost_types:
+        if sector == "water":
+            sheet_name = sector
+        else:
+            sheet_name = subsector
+        costs = pd.read_excel(os.path.join(
+                            processed_data_path,
+                            "costs_and_options",
+                            f"asset_{cost_type}_costs.xlsx"),
+                            sheet_name=sheet_name)
+
+        if subsector == "energy":
+            installed_capacities = pd.read_excel(os.path.join(
+                            processed_data_path,
+                            "data_layers",
+                            "service_targets_sdgs.xlsx"),
+                            sheet_name="sdg_energy_supply")[["iso_code","asset_type","epoch",f"{scenario}_capacity_mw"]]
+            installed_capacities = installed_capacities[
+                                (installed_capacities["epoch"] == time_epoch
+                                ) & (installed_capacities["iso_code"] == country)
+                                ]
+            installed_capacities["asset_type"] = installed_capacities["asset_type"].str.lower()
+            installed_capacities.rename(columns={f"{scenario}_capacity_mw":"modified_capacity"},inplace=True)
+            installed_capacities = add_energy_costs(installed_capacities,costs,"none",cost_type=cost_type,geometry_type=False) 
+
+    return installed_capacities
+
 
 def add_costs(gdf,country,sector,subsector,layer,cost_types,time_epoch,scenario):
     processed_data_path = load_config()['paths']['data']

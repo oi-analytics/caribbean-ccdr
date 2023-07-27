@@ -35,7 +35,7 @@ def get_damage_exposure_values(df1,df2,merge_columns,hk,adapt_damage_file):
                                 list(
                                     itertools.product(
                                         ["damage","exposure"], 
-                                        [h for h in ["amin","mean","amax"] if h != hk]
+                                        [h for h in ["min","mean","max"] if h != hk]
                                         )
                                     )
                                 )]
@@ -65,11 +65,11 @@ def add_adaptation_costs(geo_dataframe,dataframe_type,
 
     geo_dataframe["cost_markup"] = np.where(geo_dataframe["rebuild_asset"] == "yes",1,0) + geo_dataframe[cost_uplift_column]
     geo_dataframe[
-            [f"adaptation_investment_{hk}" for hk in ["amin","amax"]]
+            [f"adaptation_investment_{hk}" for hk in ["min","max"]]
             ] = geo_dataframe[
                     [f"{cost_column}_{hk}" for hk in ["min","max"]]
                     ].multiply(geo_dataframe["cost_markup"],axis="index")
-    geo_dataframe["adaptation_investment_mean"] = 0.5*(geo_dataframe["adaptation_investment_amin"] + geo_dataframe["adaptation_investment_amax"])
+    geo_dataframe["adaptation_investment_mean"] = 0.5*(geo_dataframe["adaptation_investment_min"] + geo_dataframe["adaptation_investment_max"])
     
     return geo_dataframe
 
@@ -140,7 +140,7 @@ def main(config,country,hazard_columns,direct_damages_folder,
             else:
                 no_adapt_asset_loss_df = pd.read_parquet(no_adapt_asset_loss_file)
             
-            for hk in ["amin","mean","amax"]:
+            for hk in ["min","mean","max"]:
                 if len(asset_service_columns) > 1:
                     slc = "service_loss_disrupted"
                     no_adapt_sector_loss_df[
@@ -159,7 +159,7 @@ def main(config,country,hazard_columns,direct_damages_folder,
             for res in no_adapt_sector_loss_df.itertuples():
                 res_df = []
                 rest_df = []
-                for hk in ["amin","mean","amax"]:
+                for hk in ["min","mean","max"]:
                     service_loss = round(getattr(res,f"{slc}_{hk}_percentage"),2) + 1
                     targets = [st for st in service_targets if st >= 100.0 - service_loss]
                     targets_df = []
@@ -311,20 +311,20 @@ def main(config,country,hazard_columns,direct_damages_folder,
                     cost_df = add_adaptation_costs(cost_df,asset_info.asset_layer,"construction_cost","cost_uplift")
                     asset_costs_df.append(
                             cost_df[
-                                [asset_id,"hazard","epoch"] + [f"adaptation_investment_{hk}" for hk in ["amin","mean","amax"]]
+                                [asset_id,"hazard","epoch"] + [f"adaptation_investment_{hk}" for hk in ["min","mean","max"]]
                                 ])
 
                 asset_costs_df = pd.concat(asset_costs_df,axis=0,ignore_index=True)
                 no_adapt_damage_df = pd.merge(no_adapt_damage_df,asset_costs_df,how="left",on=[asset_id,"hazard","epoch"])
 
-                for hk in ["amin","mean","amax"]:
+                for hk in ["min","mean","max"]:
                     no_adapt_damage_df[f"adaptation_investment_{hk}"] = no_adapt_damage_df[f"exposure_{hk}"]*no_adapt_damage_df[f"adaptation_investment_{hk}"]
 
 
                 adapt_targets_df = pd.merge(adapt_targets_df,
                                         no_adapt_damage_df[
                                             [asset_id] + sector_columns  + hazard_columns + [
-                                            f"adaptation_investment_{hk}" for hk in ["amin","mean","amax"]
+                                            f"adaptation_investment_{hk}" for hk in ["min","mean","max"]
                                             ]],
                                         how="left",on=[asset_id] + sector_columns  + hazard_columns)
                 adapt_targets_df.to_csv(os.path.join(direct_damages_results,

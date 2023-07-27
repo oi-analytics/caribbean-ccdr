@@ -22,10 +22,10 @@ TRUNC_THRESH = 0.95
 COST = 'time_m'
 
 def get_percentage_exposures_losses(damages_df,sector_total_service,service_disruption_columns):
-    for hk in ["amin","mean","amax"]:
+    for hk in ["min","mean","max"]:
         damages_df[f"exposure_{hk}_percentage"] = 100.0*damages_df[f"exposure_{hk}"]/sector_total_service["asset_area"]
     for sc in service_disruption_columns:
-        for hk in ["amin","mean","amax"]: 
+        for hk in ["min","mean","max"]: 
             damages_df[f"{sc}_disrupted_{hk}_percentage"] = 100.0*damages_df[f"{sc}_disrupted_{hk}"]/sector_total_service[f"total_{sc}"]
             damages_df = damages_df.sort_values(by=[f"{sc}_disrupted_{hk}_percentage"],ascending=False)
             damages_df[f"{sc}_disrupted_{hk}_percentage_cumsum"] = damages_df.groupby(
@@ -37,9 +37,9 @@ def get_percentage_exposures_losses(damages_df,sector_total_service,service_disr
 
 def add_disruptions(disruptions_df,disruption_columns,hazard_columns):
     sum_dict = dict([
-                    (f"exposure_{hk}","sum") for hk in ["amin","mean","amax"]
+                    (f"exposure_{hk}","sum") for hk in ["min","mean","max"]
                     ]+[
-                    (f"damage_{hk}","sum") for hk in ["amin","mean","amax"]
+                    (f"damage_{hk}","sum") for hk in ["min","mean","max"]
                     ] + [
                     (f"{dc}","sum") for dc in disruption_columns
                     ]
@@ -61,7 +61,7 @@ def buildings_and_points_disruptions(building_df,asset_service_df,building_servi
                             )**(building_df["epoch"] - building_df["service_year"])
                             )*building_df[bs]
 
-        for i in ["amin","mean","amax"]:
+        for i in ["min","mean","max"]:
             building_df[f"{bs}_disrupted_{i}"] = (building_df[f"exposure_{i}"]/building_df["asset_area"])*building_df[bs]
             service_disruption_columns.append(f"{bs}_disrupted_{i}")
 
@@ -367,16 +367,20 @@ def main(config,country,hazard_names,direct_damages_folder,
                 path_types = [
                                 "health_pathdata_time_m_60.parquet",
                                 "schools_pathdata_time_m_60.parquet",
-                                "pathdata_time_m_30_truncated.parquet"]
-                truncate = [False,True,False]
+                                "pathdata_time_m_30.parquet"]
+                truncate = [False,False,False]
                 path_dfs = []
                 total_trips = 0
                 for idx,(pt,tr) in enumerate(zip(path_types,truncate)): 
+                    # path_df = pd.read_parquet(os.path.join(output_data_path,
+                    #                     'transport',
+                    #                     'path and flux data',
+                    #                     f'{country.upper()}_{pt}'),
+                    #                     engine="fastparquet")
                     path_df = pd.read_parquet(os.path.join(output_data_path,
                                         'transport',
                                         'path and flux data',
-                                        f'{country.upper()}_{pt}'),
-                                        engine="fastparquet")
+                                        f'{country.upper()}_{pt}'))
                     if tr is True:
                         path_df, *_ = tfdf.truncate_by_threshold(path_df, threshold=0.99)
                     path_df["flux"] = demand_change_factor*path_df["flux"]

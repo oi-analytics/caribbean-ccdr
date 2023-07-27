@@ -29,12 +29,13 @@ def main(config):
     damage_curves_csv = os.path.join(processed_data_path,
                             "damage_curves",
                             "asset_damage_curve_mapping.csv")
-    # adaptation_options = ["no_adaptation","with_adaptation"]
+    adaptation_options = ["no_adaptation","with_adaptation"]
     # adaptation_options = ["no_adaptation"]
-    adaptation_options = ["with_adaptation"]
+    # adaptation_options = ["with_adaptation"]
     # countries = ["dma","grd","lca","vct"]
     countries = ["lca"]
-    hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","chaz_cyclones"]
+    # hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","chaz_cyclones"]
+    hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","storm_cyclones"]
     # hazard_columns = ["hazard","isoa3","epoch","rcp","rp","precipitation_factor"]
     hazard_columns = ["hazard","isoa3","epoch","rcp","rp"]
     development_scenarios = ["bau","sdg"]
@@ -101,6 +102,7 @@ def main(config):
                 #         "damages_summarise.py",
                 #         f"{country}",
                 #         f"{hazards}",
+                #         f"{hazard_columns}",
                 #         f"{damage_results_folder}",
                 #         f"{summary_folder}",
                 #         f"{network_csv}",
@@ -115,39 +117,39 @@ def main(config):
                 # """
                 # shutil.rmtree(os.path.join(results_path,f"{damage_results_folder}_{dev_sc}"))
 
-                """Next we call the losses scripts
-                """
-                if adapt_option == "no_adaptation":
-                    # args = [
-                    #         "python",
-                    #         "asset_service_disruption.py",
-                    #         f"{country}",
-                    #         f"{hazard_columns}",
-                    #         f"{summary_folder}",
-                    #         f"{service_loss_folder}",
-                    #         f"{network_csv}",
-                    #         f"{service_csv}",
-                    #         f"{dev_sc}"
-                    #         ]
-                    # print ("* Start the processing of summarising damage results")
-                    # print (args)
-                    # subprocess.run(args)
-                    hazard_indexes = hazard_columns 
-                else:
-                    # args = [
-                    #         "python",
-                    #         "adaptation_prioritisation.py",
-                    #         f"{country}",
-                    #         f"{hazard_columns}",
-                    #         f"{summary_folder}",
-                    #         f"{service_loss_folder}",
-                    #         f"{network_csv}",
-                    #         f"{dev_sc}"
-                    #         ]
-                    # print ("* Start the processing of summarising damage results")
-                    # print (args)
-                    # subprocess.run(args)
-                    hazard_indexes = hazard_columns + ["service_resilience_target_percentage"]
+                # """Next we call the losses scripts
+                # """
+                # if adapt_option == "no_adaptation":
+                #     args = [
+                #             "python",
+                #             "asset_service_disruption.py",
+                #             f"{country}",
+                #             f"{hazard_columns}",
+                #             f"{summary_folder}",
+                #             f"{service_loss_folder}",
+                #             f"{network_csv}",
+                #             f"{service_csv}",
+                #             f"{dev_sc}"
+                #             ]
+                #     print ("* Start the processing of summarising damage results")
+                #     print (args)
+                #     subprocess.run(args)
+                #     hazard_indexes = hazard_columns 
+                # else:
+                #     args = [
+                #             "python",
+                #             "adaptation_prioritisation.py",
+                #             f"{country}",
+                #             f"{hazard_columns}",
+                #             f"{summary_folder}",
+                #             f"{service_loss_folder}",
+                #             f"{network_csv}",
+                #             f"{dev_sc}"
+                #             ]
+                #     print ("* Start the processing of summarising damage results")
+                #     print (args)
+                #     subprocess.run(args)
+                #     hazard_indexes = hazard_columns + ["service_resilience_target_percentage"]
 
                 # args = [
                 #         "python",
@@ -169,6 +171,17 @@ def main(config):
                     args = [
                         "python",
                         "benefits_estimation.py",
+                        f"{country}",
+                        f"{network_csv}",
+                        f"{dev_sc}"
+                        ]
+                    print ("* Start the processing of summarising damage results")
+                    print (args)
+                    subprocess.run(args)
+
+                    args = [
+                        "python",
+                        "combined_results.py",
                         f"{country}",
                         f"{network_csv}",
                         f"{dev_sc}"
