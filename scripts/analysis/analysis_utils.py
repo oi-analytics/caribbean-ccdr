@@ -612,6 +612,14 @@ def network_ods_assembly(points_dataframe,graph_dataframe,cost_criteria,attribut
     points_dataframe = points_dataframe.set_index('origin_id')
     origins = list(set(points_dataframe.index.values.tolist()))
     for origin in origins:
+        # destinations = points_dataframe.loc[[origin], 'destination_id'].values.tolist()
+
+        # get_node_path, get_edge_path = network_od_path_estimations(
+        #     graph, origin, destinations,cost_criteria)
+
+        # save_paths += list(zip([origin]*len(destinations), destinations, get_node_path, get_edge_path))
+
+        # print(f"done with {origin}")
         try:
             destinations = points_dataframe.loc[[origin], 'destination_id'].values.tolist()
 

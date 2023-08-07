@@ -45,12 +45,12 @@ def main(config,country,
     asset_data_details = asset_data_details.drop_duplicates(subset=["asset_gpkg"],keep="first")
     for asset_info in asset_data_details.itertuples():
         asset_service_columns = str(asset_info.criticality_columns).split(",")
-        output_file = os.path.join(combined_results,
-                            f"{country}_{asset_info.asset_gpkg}_risks_investments.xlsx")
-        if os.path.isfile(output_file) is True:
-            writer = pd.ExcelWriter(output_file,mode='a',if_sheet_exists='replace')
-        else:
-            writer = pd.ExcelWriter(output_file)
+        # output_file = os.path.join(combined_results,
+        #                     f"{country}_{asset_info.asset_gpkg}_risks_investments.xlsx")
+        # if os.path.isfile(output_file) is True:
+        #     writer = pd.ExcelWriter(output_file,mode='a',if_sheet_exists='replace')
+        # else:
+        #     writer = pd.ExcelWriter(output_file)
         if asset_info.asset_gpkg != "energy":    
             no_adapt_sector_loss_file = os.path.join(
                                         no_adaptation_results,
@@ -73,6 +73,12 @@ def main(config,country,
                                         )
 
         if os.path.isfile(no_adapt_sector_loss_file) is True:
+            output_file = os.path.join(combined_results,
+                                f"{country}_{asset_info.asset_gpkg}_risks_investments.xlsx")
+            if os.path.isfile(output_file) is True:
+                writer = pd.ExcelWriter(output_file,mode='a',if_sheet_exists='replace')
+            else:
+                writer = pd.ExcelWriter(output_file)
             no_adapt_sector_loss_df = pd.read_csv(no_adapt_sector_loss_file)
             with_adapt_sector_loss_df = pd.read_csv(with_adapt_sector_loss_file)
             if asset_info.asset_gpkg != "energy":

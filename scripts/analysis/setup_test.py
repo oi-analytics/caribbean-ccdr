@@ -19,7 +19,7 @@ def main(config):
 
     network_csv = os.path.join(processed_data_path,
                             "data_layers",
-                            "network_layers_hazard_intersections_details.csv")
+                            "network_layers_hazard_intersections_details_0.csv")
     service_csv = os.path.join(processed_data_path,
                             "data_layers",
                             "service_growth_rates.csv")
@@ -151,44 +151,44 @@ def main(config):
                     # subprocess.run(args)
                     hazard_indexes = hazard_columns + ["service_resilience_target_percentage"]
 
-                # args = [
+                args = [
+                        "python",
+                        "service_disruptions.py",
+                        f"{country}",
+                        f"{hazard_indexes}",
+                        f"{summary_folder}",
+                        f"{service_loss_folder}",
+                        f"{network_csv}",
+                        f"{service_csv}",
+                        f"{dev_sc}",
+                        f"{adapt_option}"
+                        ]
+                print ("* Start the processing of summarising damage results")
+                print (args)
+                subprocess.run(args)
+
+                # if adapt_option == "with_adaptation":
+                #     args = [
                 #         "python",
-                #         "service_disruptions.py",
+                #         "benefits_estimation.py",
                 #         f"{country}",
-                #         f"{hazard_indexes}",
-                #         f"{summary_folder}",
-                #         f"{service_loss_folder}",
                 #         f"{network_csv}",
-                #         f"{service_csv}",
-                #         f"{dev_sc}",
-                #         f"{adapt_option}"
+                #         f"{dev_sc}"
                 #         ]
-                # print ("* Start the processing of summarising damage results")
-                # print (args)
-                # subprocess.run(args)
+                #     print ("* Start the processing of summarising damage results")
+                #     print (args)
+                #     subprocess.run(args)
 
-                if adapt_option == "with_adaptation":
-                    args = [
-                        "python",
-                        "benefits_estimation.py",
-                        f"{country}",
-                        f"{network_csv}",
-                        f"{dev_sc}"
-                        ]
-                    print ("* Start the processing of summarising damage results")
-                    print (args)
-                    subprocess.run(args)
-
-                    args = [
-                        "python",
-                        "combined_results.py",
-                        f"{country}",
-                        f"{network_csv}",
-                        f"{dev_sc}"
-                        ]
-                    print ("* Start the processing of summarising damage results")
-                    print (args)
-                    subprocess.run(args)
+                #     args = [
+                #         "python",
+                #         "combined_results.py",
+                #         f"{country}",
+                #         f"{network_csv}",
+                #         f"{dev_sc}"
+                #         ]
+                #     print ("* Start the processing of summarising damage results")
+                #     print (args)
+                #     subprocess.run(args)
 
 
 

@@ -161,11 +161,11 @@ def get_service_columns(asset_dataframe,asset_service_columns):
     service_columns = []
     cargo_cols = [c for c in asset_service_columns if "cargo" in c]
     if cargo_cols:
-        asset_dataframe["assigned_cargo"] = 1.0/365*asset_dataframe[cargo_cols].sum(axis=1)
+        asset_dataframe["assigned_cargo"] = (1.0/365.0)*asset_dataframe[cargo_cols].astype(float).sum(axis=1)
         service_columns += ["assigned_cargo"]
     passenger_cols = [c for c in asset_service_columns if "passenger" in c]
     if passenger_cols:
-        asset_dataframe["assigned_passengers"] = 1.0/365*asset_dataframe[passenger_cols].sum(axis=1)
+        asset_dataframe["assigned_passengers"] = (1.0/365.0)*asset_dataframe[passenger_cols].astype(float).sum(axis=1)
         service_columns += ["assigned_passengers"]
     remaining_service_columns = [c for c in asset_service_columns if c not in passenger_cols + cargo_cols]
     if remaining_service_columns:

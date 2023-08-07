@@ -143,10 +143,13 @@ def energy_disruptions(asset_failure_set,supply_loss_set,failure_year,energy_edg
                 od_matrix = supply_df.merge(demand_df, how='cross')
                 od_matrix = od_matrix[~(od_matrix.origin_id.isin(asset_failure_set) | od_matrix.destination_id.isin(asset_failure_set))]
                 # del supply_df, demand_df
+                energy_edges.to_csv("test0.csv")
                 edges = energy_edges[~energy_edges["edge_id"].isin(asset_failure_set)]
                 edges = edges[~(edges["from_node"].isin(asset_failure_set) | edges["to_node"].isin(asset_failure_set))]
                 # print (edges)
-                remaining_service_df = network_ods_assembly(od_matrix,edges,
+                nodes = list(set(edges["from_node"].values.tolist() + edges["to_node"].values.tolist()))
+                od_matrix_mod = od_matrix[(od_matrix["origin_id"].isin(nodes)) & (od_matrix["destination_id"].isin(nodes))]
+                remaining_service_df = network_ods_assembly(od_matrix_mod,edges,
                                 None,["supply","assigned_service"],directed=False)
                 # remaining_service_df = energy_service_df[~energy_service_df.index.isin(failure_indexes)]
                 if len(remaining_service_df.index) > 0:
@@ -170,11 +173,11 @@ def get_service_columns(asset_dataframe,asset_service_columns):
     service_columns = []
     cargo_cols = [c for c in asset_service_columns if "cargo" in c]
     if cargo_cols:
-        asset_dataframe["assigned_cargo"] = 1.0/365*asset_dataframe[cargo_cols].sum(axis=1)
+        asset_dataframe["assigned_cargo"] = (1.0/365.0)*asset_dataframe[cargo_cols].astype(float).sum(axis=1)
         service_columns += ["assigned_cargo"]
     passenger_cols = [c for c in asset_service_columns if "passenger" in c]
     if passenger_cols:
-        asset_dataframe["assigned_passengers"] = 1.0/365*asset_dataframe[passenger_cols].sum(axis=1)
+        asset_dataframe["assigned_passengers"] = (1.0/365.0)*asset_dataframe[passenger_cols].astype(float).sum(axis=1)
         service_columns += ["assigned_passengers"]
     remaining_service_columns = [c for c in asset_service_columns if c not in passenger_cols + cargo_cols]
     if remaining_service_columns:
@@ -530,9 +533,11 @@ def main(config,country,hazard_names,direct_damages_folder,
                         dropna=False).agg(sum_dict).reset_index()
         for hk in ["min","mean","max"]:
             df = energy_sector_results[energy_sector_results[f"damage_{hk}"]>0]
+            # df.to_csv("test1.csv",index=False)
             if "asset_fix" in df.columns.values.tolist():
                 df = df[df["asset_fix"] == 0]
-            
+            # df.to_csv("test2.csv",index=False)
+            # breakpoint()
             df0 = df.groupby(["sector","subsector",
                         "damage_cost_unit",
                         "disruption_unit"] + hazard_columns,
@@ -566,6 +571,8 @@ def main(config,country,hazard_names,direct_damages_folder,
             total_disruption = pd.merge(total_disruption,df2,how="left", on=["sector","subsector",
                                                                     "damage_cost_unit","disruption_unit"] + hazard_columns)
             del df, df0, df1, df2
+            # total_disruption.to_csv("test1.csv",index=False)
+            # breakpoint()
             total_disruption["customer_losses"] = total_disruption.progress_apply(
                                                 lambda x:energy_disruptions(
                                                     x[f"asset_set_{hk}"],x[f"generation_set_{hk}"],x["epoch"],
