@@ -60,23 +60,23 @@ def main(config):
     #                     "data_layers",
     #                     "infrastructure_layers.csv"))
     countries = ["dma","grd","lca","vct"]
-    countries = ["dma"]
-    # sectors = {
-    #             "transport":["roads","ports","airports"],
-    #             "energy":["energy"],
-    #             "water":["wtp","wwtp"],
-    #             "social":["education","health"]
-    #         }
+    countries = ["grd"]
     sectors = {
-                # "energy":["energy"],
+                "transport":["roads","ports","airports"],
+                "energy":["energy"],
                 "water":["wtp","wwtp"],
-                "social":["education","health"],
-                "transport":["airports","ports"]
+                "social":["education","health"]
             }
-    sectors = {
-                # "energy":["energy"],
-                "transport":["ports"]
-            }
+    # sectors = {
+    #             # "energy":["energy"],
+    #             "water":["wtp","wwtp"],
+    #             "social":["education","health"],
+    #             "transport":["airports","ports"]
+    #         }
+    # sectors = {
+    #             # "energy":["energy"],
+    #             "transport":["ports"]
+    #         }
     for country in countries:
         paths = []
         for sector,subsectors in sectors.items():
