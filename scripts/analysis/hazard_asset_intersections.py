@@ -103,7 +103,7 @@ def main(config):
         infra_details_csv = os.path.join(processed_data_path,"data_layers",f"{country}_layers.csv")
         # hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","chaz_cyclones"]
         hazards = ["storm_cyclones","deltares_storm_surge","fathom_pluvial_fluvial","charim_landslide"]
-        hazards = ["charim_landslide"]
+        # hazards = ["charim_landslide"]
         for hazard in hazards:
             hazard_csv = os.path.join(processed_data_path,"hazards",f"{hazard}_{country}.csv")
             features_df = create_feature_csv(infra_details_csv,hazard_csv,intersection_results_path)

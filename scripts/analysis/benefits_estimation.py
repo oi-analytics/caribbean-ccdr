@@ -51,7 +51,7 @@ def main(config,country,
         #     writer = pd.ExcelWriter(output_file,mode='a',if_sheet_exists='replace')
         # else:
         #     writer = pd.ExcelWriter(output_file)
-        if asset_info.asset_gpkg != "energy":    
+        if asset_info.asset_gpkg != "energy" or country == "grd":    
             no_adapt_sector_loss_file = os.path.join(
                                         no_adaptation_results,
                                         f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages_losses.csv"
@@ -81,7 +81,7 @@ def main(config,country,
                 writer = pd.ExcelWriter(output_file)
             no_adapt_sector_loss_df = pd.read_csv(no_adapt_sector_loss_file)
             with_adapt_sector_loss_df = pd.read_csv(with_adapt_sector_loss_file)
-            if asset_info.asset_gpkg != "energy":
+            if asset_info.asset_gpkg != "energy" or country == "grd":
                 with_adapt_asset_costs_file = os.path.join(with_adaptation_costs,
                                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.csv")
                 with_adapt_asset_costs_df = pd.read_csv(with_adapt_asset_costs_file)

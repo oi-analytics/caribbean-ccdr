@@ -27,7 +27,7 @@ def main(config):
     network_csv = os.path.join(processed_data_path,
                             "data_layers",
                             "network_layers_hazard_intersections_details.csv")
-    countries = ["lca","dma"]
+    countries = ["lca","dma","grd"]
     epochs = [2023,2030,2050]
     development_scenarios = ["bau","sdg"]
     asset_data_details = pd.read_csv(network_csv)[["sector","asset_gpkg"]]
@@ -74,13 +74,15 @@ def main(config):
                                 capacity_cost_min = 0
                                 capacity_cost_max = 0
 
-                            asset_df = add_costs(asset_df,country,
-                                                asset_info.sector,asset_info.asset_gpkg,
-                                                asset_layer,
-                                                ["rehabilitation"],epoch,
-                                                development_scenario)
-                            capital_cost_min = capacity_cost_min + sum(asset_df["rehabilitation_cost_min"]*asset_df["dimension"])
-                            capital_cost_max = capacity_cost_max + sum(asset_df["rehabilitation_cost_max"]*asset_df["dimension"])
+                            if len(asset_df) > 0:
+                                asset_df = add_costs(asset_df,country,
+                                                    asset_info.sector,asset_info.asset_gpkg,
+                                                    asset_layer,
+                                                    ["rehabilitation"],epoch,
+                                                    development_scenario)
+                                capital_cost_min = capacity_cost_min + sum(asset_df["rehabilitation_cost_min"]*asset_df["dimension"])
+                                capital_cost_max = capacity_cost_max + sum(asset_df["rehabilitation_cost_max"]*asset_df["dimension"])
+                            
                             capital_cost_mean = 0.5*(capital_cost_min + capital_cost_max)
 
                             capital_costs.append({"sector":asset_info.sector,

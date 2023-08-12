@@ -66,20 +66,28 @@ def buildings_and_points_disruptions(building_df,asset_service_df,building_servi
 
     percentage_disruptions = []
     epochs = list(set(building_df["epoch"].values.tolist()))
+    remove_epoch = False
     for epoch in epochs:
-        asset_service_df["epoch"] = epoch
+        if "epoch" not in asset_service_df.columns.values.tolist():
+            asset_service_df["epoch"] = epoch
+            remove_epoch = True
         for bs in building_service_columns:
             asset_service_df[f"total_{bs}"] = (
                                                 (1 + 0.01*asset_service_df["growth_rate_percent"]
                                                  )**(asset_service_df["epoch"] - asset_service_df["service_year"])
                                             )*asset_service_df[bs]
 
-        total_service_df = asset_service_df[["asset_area"] + [f"total_{bs}" for bs in building_service_columns]].sum(axis=0)
+        total_service_df = asset_service_df[
+                        asset_service_df["epoch"] == epoch
+                        ][["asset_area"] + [f"total_{bs}" for bs in building_service_columns]].sum(axis=0)
 
         percentage_disruptions.append(get_percentage_exposures_losses(
                                                         sector_effects[sector_effects["epoch"] == epoch],
                                                         total_service_df,
                                                         building_service_columns))
+        if remove_epoch is True:
+            asset_service_df.drop("epoch",axis=1,inplace=True)
+
     return pd.concat(percentage_disruptions,axis=0,ignore_index=True)
     
 
@@ -249,6 +257,7 @@ def main(config,country,hazard_names,direct_damages_folder,
 
     asset_data_details = pd.read_csv(network_csv)
     service_data_details = pd.read_csv(service_csv)
+    service_data_details = service_data_details[service_data_details["iso_code"] == country]
     service_scenarios = pd.read_excel(os.path.join(
                                 processed_data_path,
                                 "data_layers",
@@ -282,36 +291,61 @@ def main(config,country,hazard_names,direct_damages_folder,
 
 
         if os.path.isfile(damage_file) is True:
-            # damage_results = pd.read_parquet(damage_file)
             damage_results = pd.read_csv(damage_file)
-            # damage_results = modify_epoch(damage_results,baseline_year)
-            # replicate and add landslides 
-            # landslide = damage_results[damage_results["hazard"] == "landslide"]
-            # landslides = [landslide]
-            # for epoch in [2030,2050]:
-            #     l = landslide.copy()
-            #     l["epoch"] = epoch
-            #     landslides.append(l)
-            # landslides = pd.concat(landslides,axis=0,ignore_index=True)
-            # damage_results = damage_results[damage_results["hazard"] != "landslide"]
-            # damage_results = pd.concat([damage_results,landslides],axis=0,ignore_index=True)
-            # del landslide, l, landslides
-            asset_service_df = gpd.read_file(os.path.join(
-                                        processed_data_path,
-                                        "infrastructure",
-                                        asset_info.sector,
-                                        f"{country}_{asset_info.asset_gpkg}.gpkg"),
-                                    layer=asset_info.asset_layer)
-            if asset_info.asset_layer == "areas":
-                asset_service_df = asset_service_df.to_crs(epsg=epsg_caribbean)
-                asset_service_df["asset_area"] = asset_service_df.geometry.area
-            elif asset_info.asset_layer == "edges":
-                asset_service_df = asset_service_df.to_crs(epsg=epsg_caribbean)
-                asset_service_df["asset_area"] = asset_service_df.geometry.length
-            else:
+            if os.path.isfile(os.path.join(processed_data_path,
+                                "infrastructure",
+                                asset_info.sector,
+                                f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}.csv")) is True:
+                asset_service_df = pd.read_csv(os.path.join(
+                                            processed_data_path,
+                                            "infrastructure",
+                                            asset_info.sector,
+                                            f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}.csv")
+                                        )
                 asset_service_df["asset_area"] = 1
+            else:
+                asset_service_df = gpd.read_file(os.path.join(
+                                            processed_data_path,
+                                            "infrastructure",
+                                            asset_info.sector,
+                                            f"{country}_{asset_info.asset_gpkg}.gpkg"),
+                                        layer=asset_info.asset_layer)
+                if asset_info.asset_layer == "areas":
+                    asset_service_df = asset_service_df.to_crs(epsg=epsg_caribbean)
+                    asset_service_df["asset_area"] = asset_service_df.geometry.area
+                elif asset_info.asset_layer == "edges":
+                    asset_service_df = asset_service_df.to_crs(epsg=epsg_caribbean)
+                    asset_service_df["asset_area"] = asset_service_df.geometry.length
+                else:
+                    asset_service_df["asset_area"] = 1
 
-            if asset_info.asset_gpkg == "energy":
+            if asset_info.service_disruption_level == "asset":
+                hazard_columns = [h for h in damage_results.columns.values.tolist() if h in hazard_names]
+                service_columns = get_service_columns(asset_service_df,asset_service_columns)
+                if asset_info.asset_gpkg == "energy":
+                    asset_service_df = asset_service_df[asset_service_df["development_scenario"] == development_scenario]
+                    merge_columns = [asset_id,"epoch"]
+                else:
+                    merge_columns = [asset_id]
+                asset_service_df = asset_service_df[merge_columns + ["asset_area"] + service_columns]
+                asset_service_df[service_columns] = asset_service_df[service_columns].fillna(0)
+                asset_service_df[service_columns] = demand_change_factor*asset_service_df[service_columns]
+                asset_service_df = add_service_year_and_growth_rates(
+                                            asset_service_df,
+                                            asset_id,
+                                            service_data_details[
+                                                service_data_details["asset_gpkg"] == asset_info.asset_gpkg
+                                                ]
+                                            )
+                damage_results = pd.merge(damage_results,asset_service_df,how="left",on=merge_columns)
+                sector_damages_losses = buildings_and_points_disruptions(damage_results,
+                                                        asset_service_df,
+                                                        service_columns,
+                                                        hazard_columns)
+                sector_damages_losses.to_csv(os.path.join(damages_service_results,
+                            f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages_losses.csv"),index=False)
+
+            elif asset_info.asset_gpkg == "energy":
                 energy_demand_factor = demand_change_factor
                 if "capacity_mw" in asset_service_df.columns.values.tolist():
                     asset_service_dfs = modify_energy_capacities(
@@ -466,27 +500,6 @@ def main(config,country,hazard_names,direct_damages_folder,
                 disruption_df.drop(["growth_rate_percent","service_year"],axis=1,inplace=True)
                 disruption_df.to_csv(os.path.join(damages_service_results,
                             f"{country}_roads_edges_sector_damages_losses.csv"),index=False)
-
-            elif asset_info.service_disruption_level == "asset":
-                hazard_columns = [h for h in damage_results.columns.values.tolist() if h in hazard_names]
-                service_columns = get_service_columns(asset_service_df,asset_service_columns)
-                asset_service_df = asset_service_df[[asset_id, "asset_area"] + service_columns]
-                asset_service_df[service_columns] = asset_service_df[service_columns].fillna(0)
-                asset_service_df[service_columns] = demand_change_factor*asset_service_df[service_columns]
-                asset_service_df = add_service_year_and_growth_rates(
-                                            asset_service_df,
-                                            asset_id,
-                                            service_data_details[
-                                                service_data_details["asset_gpkg"] == asset_info.asset_gpkg
-                                                ]
-                                            )
-                damage_results = pd.merge(damage_results,asset_service_df,how="left",on=[asset_id])
-                sector_damages_losses = buildings_and_points_disruptions(damage_results,
-                                                        asset_service_df,
-                                                        service_columns,
-                                                        hazard_columns)
-                sector_damages_losses.to_csv(os.path.join(damages_service_results,
-                            f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages_losses.csv"),index=False)
 
     if energy_sector_results:
         energy_edges = gpd.read_file(os.path.join(
