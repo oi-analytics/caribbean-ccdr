@@ -27,7 +27,7 @@ def main(config):
     network_csv = os.path.join(processed_data_path,
                             "data_layers",
                             "network_layers_hazard_intersections_details.csv")
-    countries = ["lca","dma","grd"]
+    countries = ["lca","dma","grd","vct"]
     epochs = [2023,2030,2050]
     development_scenarios = ["bau","sdg"]
     asset_data_details = pd.read_csv(network_csv)[["sector","asset_gpkg"]]

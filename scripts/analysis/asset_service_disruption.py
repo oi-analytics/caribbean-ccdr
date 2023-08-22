@@ -328,10 +328,17 @@ def main(config,country,hazard_names,direct_damages_folder,
                     flow_dfs = pd.concat(flow_dfs,axis=0,ignore_index=True)
                     del energy_flow_df
             
-                    flow_dfs.to_csv(os.path.join(damages_service_results,
-                                f"{country}_{asset_info.asset_gpkg}_asset_damages_losses.csv"),index=False)
+                    # flow_dfs.to_csv(os.path.join(damages_service_results,
+                    #             f"{country}_{asset_info.asset_gpkg}_asset_damages_losses.csv"),index=False)
+                    print (flow_dfs)
+                    # flow_dfs["node_path"] = flow_dfs["node_path"].astype(str)
+                    # flow_dfs["edge_path"] = flow_dfs["edge_path"].astype(str)
+                    # flow_dfs.to_parquet(os.path.join(damages_service_results,
+                    #             f"{country}_{asset_info.asset_gpkg}_asset_damages_losses.parquet"),
+                    #             index=False,engine="fastparquet")
                     flow_dfs.to_parquet(os.path.join(damages_service_results,
-                                f"{country}_{asset_info.asset_gpkg}_asset_damages_losses.parquet"),index=False)
+                                f"{country}_{asset_info.asset_gpkg}_asset_damages_losses.parquet"),
+                                index=False)
                     energy_flow_assessment = False
             
             elif asset_info.asset_gpkg == "roads":
@@ -359,8 +366,8 @@ def main(config,country,hazard_names,direct_damages_folder,
                 path_dfs["trips_disrupted_percentage_cumsum"] = path_dfs["trips_disrupted_percentage"].cumsum()
                         
 
-                path_dfs.to_csv(os.path.join(damages_service_results,
-                            f"{country}_roads_asset_damages_losses.csv"),index=False)
+                # path_dfs.to_csv(os.path.join(damages_service_results,
+                #             f"{country}_roads_asset_damages_losses.csv"),index=False)
                 path_dfs.to_parquet(os.path.join(damages_service_results,
                             f"{country}_roads_asset_damages_losses.parquet"),index=False)
 

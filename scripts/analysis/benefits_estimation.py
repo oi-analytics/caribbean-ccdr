@@ -61,7 +61,7 @@ def main(config,country,
                                         f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_sector_damages_losses.csv"
                                         )
             with_adapt_asset_costs_file = os.path.join(with_adaptation_costs,
-                                f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.csv")
+                                f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.parquet")
         else:
             no_adapt_sector_loss_file = os.path.join(
                                         no_adaptation_results,
@@ -83,14 +83,14 @@ def main(config,country,
             with_adapt_sector_loss_df = pd.read_csv(with_adapt_sector_loss_file)
             if asset_info.asset_gpkg != "energy" or country == "grd":
                 with_adapt_asset_costs_file = os.path.join(with_adaptation_costs,
-                                f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.csv")
-                with_adapt_asset_costs_df = pd.read_csv(with_adapt_asset_costs_file)
+                                f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.parquet")
+                with_adapt_asset_costs_df = pd.read_parquet(with_adapt_asset_costs_file)
             else:
                 layers = [os.path.join(with_adaptation_costs,
-                                        f"{country}_energy_{asset_layer}_asset_targets_costs.csv"
+                                        f"{country}_energy_{asset_layer}_asset_targets_costs.parquet"
                                 ) for asset_layer in ["nodes","edges","areas"]]
                 with_adapt_asset_costs_df = [
-                            pd.read_csv(layer) for layer in layers if os.path.isfile(layer) is True
+                            pd.read_parquet(layer) for layer in layers if os.path.isfile(layer) is True
                             ]
                 with_adapt_asset_costs_df = pd.concat(with_adapt_asset_costs_df,axis=0,ignore_index=True)
 

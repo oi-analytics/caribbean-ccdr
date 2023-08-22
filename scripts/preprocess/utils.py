@@ -123,7 +123,7 @@ def create_network_from_nodes_and_edges(nodes,edges,node_edge_prefix,snap_distan
     network.nodes = snkit.network.drop_duplicate_geometries(network.nodes)
     print ('* Done with dropping same geometries')
 
-    network = snkit.network.split_edges_at_nodes(network,tolerance=9e-10)
+    network = snkit.network.split_edges_at_nodes(network,tolerance=1e-9)
     print ('* Done with splitting edges at nodes')
     
     network = snkit.network.add_ids(network, 

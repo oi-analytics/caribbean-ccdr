@@ -106,11 +106,16 @@ def energy_service_path_indexes(energy_service_df):
 
     return node_path_indexes, edge_path_indexes
 
-def energy_disruptions(asset_failure_set,supply_loss_set,failure_year,energy_edges,energy_service_df,
+def energy_disruptions(asset_failure_set,supply_loss_set,
+                        failure_year,
+                        energy_edges,
+                        energy_service_df,
+                        node_path_indexes,
+                        edge_path_indexes,
                         service_growth_df,
                         supply_column,service_column):
     
-    node_path_indexes, edge_path_indexes = energy_service_path_indexes(energy_service_df)
+    # node_path_indexes, edge_path_indexes = energy_service_path_indexes(energy_service_df)
 
     if str(asset_failure_set) != "nan":
         failure_indexes = list(set(list(chain.from_iterable([path_idx for path_key,path_idx in node_path_indexes.items() if path_key in asset_failure_set]))))
@@ -130,7 +135,8 @@ def energy_disruptions(asset_failure_set,supply_loss_set,failure_year,energy_edg
             # total_supply = energy_service_df.drop_duplicates(subset=["origin_id"], keep="first")[supply_column].sum()
             total_supply = energy_service_df["total_installed_capacity"].values[0] 
             failed_supply = sum(supply_loss_set)
-            failed_demand_nodes = list(set([n for n in asset_failure_set if n in list(set(energy_service_df["destination_id"].values.tolist()))]))
+            # failed_demand_nodes = list(set([n for n in asset_failure_set if n in list(set(energy_service_df["destination_id"].values.tolist()))]))
+            failed_demand_nodes = list(set(energy_service_df[energy_service_df["destination_id"].isin(asset_failure_set)]["destination_id"].values.tolist()))
             failed_service_df = energy_service_df[energy_service_df.index.isin(failure_indexes)]
             if failed_supply == total_supply:
                 return total_service, 100.0
@@ -146,12 +152,13 @@ def energy_disruptions(asset_failure_set,supply_loss_set,failure_year,energy_edg
                 else:
                     energy_service_df["supply"] = energy_service_df[supply_column].copy()
                 
-                supply_df = energy_service_df[["origin_id",supply_column,"supply"]].drop_duplicates(subset=["origin_id"], keep="first")
-                demand_df = energy_service_df[["destination_id","assigned_service"]].drop_duplicates(subset=["destination_id"], keep="first")
-                od_matrix = supply_df.merge(demand_df, how='cross')
-                od_matrix = od_matrix[~(od_matrix.origin_id.isin(asset_failure_set) | od_matrix.destination_id.isin(asset_failure_set))]
+                # supply_df = energy_service_df[["origin_id",supply_column,"supply"]].drop_duplicates(subset=["origin_id"], keep="first")
+                # demand_df = energy_service_df[["destination_id","assigned_service"]].drop_duplicates(subset=["destination_id"], keep="first")
+                # od_matrix = supply_df.merge(demand_df, how='cross')
+                # od_matrix = od_matrix[~(od_matrix.origin_id.isin(asset_failure_set) | od_matrix.destination_id.isin(asset_failure_set))]
+                od_matrix = energy_service_df[~(energy_service_df.origin_id.isin(asset_failure_set) | energy_service_df.destination_id.isin(asset_failure_set))]
                 # del supply_df, demand_df
-                energy_edges.to_csv("test0.csv")
+                # energy_edges.to_csv("test0.csv")
                 edges = energy_edges[~energy_edges["edge_id"].isin(asset_failure_set)]
                 edges = edges[~(edges["from_node"].isin(asset_failure_set) | edges["to_node"].isin(asset_failure_set))]
                 # print (edges)
@@ -283,15 +290,19 @@ def main(config,country,hazard_names,direct_damages_folder,
                                         direct_damages_results,
                                         f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_damages.csv"
                                         )
+            csv_file = True
         else:
             damage_file = os.path.join(
                                         direct_damages_results,
-                                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.csv"
+                                        f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.parquet"
                                         )
-
+            csv_file = False
 
         if os.path.isfile(damage_file) is True:
-            damage_results = pd.read_csv(damage_file)
+            if csv_file is True:
+                damage_results = pd.read_csv(damage_file)
+            else:
+                damage_results = pd.read_parquet(damage_file)
             if os.path.isfile(os.path.join(processed_data_path,
                                 "infrastructure",
                                 asset_info.sector,
@@ -586,18 +597,33 @@ def main(config,country,hazard_names,direct_damages_folder,
             del df, df0, df1, df2
             # total_disruption.to_csv("test1.csv",index=False)
             # breakpoint()
-            total_disruption["customer_losses"] = total_disruption.progress_apply(
-                                                lambda x:energy_disruptions(
-                                                    x[f"asset_set_{hk}"],x[f"generation_set_{hk}"],x["epoch"],
-                                                    energy_edges,
-                                                    flow_dfs[flow_dfs["epoch"] == x.epoch],
-                                                    service_data_details[
-                                                        service_data_details["asset_gpkg"] == asset_info.asset_gpkg
-                                                        ],
-                                                    "modified_capacity","pop_2020"),
-                                                axis=1)
-            total_disruption[[f"customers_disrupted_{hk}",f"customers_disrupted_{hk}_percentage"]] = total_disruption["customer_losses"].apply(pd.Series)
-            total_disruption.drop(["customer_losses"],axis=1,inplace=True)
+            # node_path_indexes, edge_path_indexes = energy_service_path_indexes(energy_service_df)
+            cl_df = []
+            for epoch in list(set(total_disruption.epoch.values.tolist())):
+                td_df = total_disruption[total_disruption["epoch"] == epoch]
+                fl_df = flow_dfs[flow_dfs["epoch"] == epoch]
+                nd_pth_idx, ed_pth_idx = energy_service_path_indexes(fl_df)
+
+                td_df["customer_losses"] = td_df.progress_apply(
+                                                    lambda x:energy_disruptions(
+                                                        x[f"asset_set_{hk}"],x[f"generation_set_{hk}"],x["epoch"],
+                                                        energy_edges,
+                                                        fl_df,
+                                                        nd_pth_idx, ed_pth_idx,
+                                                        service_data_details[
+                                                            service_data_details["asset_gpkg"] == asset_info.asset_gpkg
+                                                            ],
+                                                        "modified_capacity","pop_2020"),
+                                                    axis=1)
+                td_df[[f"customers_disrupted_{hk}",f"customers_disrupted_{hk}_percentage"]] = td_df["customer_losses"].apply(pd.Series)
+                cl_df.append(td_df[["sector","subsector",
+                                "damage_cost_unit","disruption_unit"
+                                ] + hazard_columns + [f"customers_disrupted_{hk}",f"customers_disrupted_{hk}_percentage"]])
+                del td_df
+
+            cl_df = pd.concat(cl_df,axis=0,ignore_index=True)
+            total_disruption = pd.merge(total_disruption,cl_df,how="left", on=["sector","subsector",
+                                                                    "damage_cost_unit","disruption_unit"] + hazard_columns)
             total_disruption.drop([f"asset_set_{hk}",f"generation_set_{hk}"],axis=1,inplace=True)
         
         total_disruption.to_csv(os.path.join(damages_service_results,

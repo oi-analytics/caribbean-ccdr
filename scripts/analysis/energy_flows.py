@@ -15,12 +15,41 @@ from analysis_utils import *
 from tqdm import tqdm
 tqdm.pandas()
 
-def write_to_file(path,path_column,filename,key=None):
+def write_to_file(path,path_column,filename,key=None,layer=None):
     df = pd.DataFrame()
     df[path_column] = [path]
     if key is not None:
         df["key"] = [key]
+    if layer is not None:
+        df["layer"] = [layer]
     df.to_csv(filename,index=False)
+
+def create_feature_csv(networks_csv, hazards_csv,output_path):
+    # read transforms, record with hazards
+    output_df = []
+    hazards = pd.read_csv(hazards_csv)
+    hazards.rename(columns={"fname":"path"},inplace=True)
+    hazards.to_csv(hazards_csv,index=False)
+    if len(hazards.index) > 0:
+        hazard_slug = os.path.basename(hazards_csv).replace(".csv", "")
+        # hazard_transforms, transforms = read_transforms(hazards, data_path)
+        # hazard_transforms.to_csv(hazards_csv.replace(".csv", "__with_transforms.csv"), index=False)
+
+        # read networks
+        networks = pd.read_csv(networks_csv)
+
+        for n in networks.itertuples():
+            network_path = n.path
+            layer_name = n.layer
+            # fname = os.path.join(data_path, network_path)
+            out_fname = os.path.join(
+                output_path,
+                os.path.basename(network_path).replace(".gpkg", f"_splits__{hazard_slug}.gpkg")
+            )
+            fname_out = out_fname.replace(".gpkg",f"__{layer_name}.geoparquet")
+            output_df.append((network_path,layer_name,fname_out))
+
+    return pd.DataFrame(output_df,columns=["path","layer","output_path"])
 
 def main(config):
     # Set global paths
@@ -41,8 +70,10 @@ def main(config):
         os.mkdir(energy_flow_path) 
 
     caribbean_epsg = 32620
-    countries = ["dma","lca"]
-    countries_access = [1,0.9955]
+    countries = ["dma","lca","vct"]
+    countries_access = [1.0,0.9955,1.0]
+    countries = ["vct"]
+    countries_access = [1.0]
     for cdx,(country,access) in enumerate(zip(countries,countries_access)):
         # Read the energy nodes for each country
         read_gpkg = os.path.join(
@@ -87,18 +118,18 @@ def main(config):
                                             "node_id",
                                             country_boundary,
                                             epsg=caribbean_epsg)
-                # gpd.GeoDataFrame(energy_voronoi,geometry="geometry",crs=f"EPSG:{caribbean_epsg}").to_file(
-                #                     os.path.join(
-                #                             voronoi_path,
-                #                             f"{country}_energy_voronoi.gpkg"
-                #                         ),
-                #                     layer="areas",driver="GPKG")
+                gpd.GeoDataFrame(energy_voronoi,geometry="geometry",crs=f"EPSG:{caribbean_epsg}").to_file(
+                                    os.path.join(
+                                            voronoi_path,
+                                            f"{country}_energy_voronoi.gpkg"
+                                        ),
+                                    layer="areas",driver="GPKG")
 
                 # Write the voronoi file path to a csv file
                 write_to_file(f"infrastructure/energy/energy_voronoi/{country}_energy_voronoi.gpkg","path",
-                            os.path.join(processed_data_path,"data_layers","energy_voronoi_layers.csv"))
+                            os.path.join(processed_data_path,"data_layers","energy_voronoi_layers.csv"),layer="areas")
                 # Write the population data layer also to a csv file
-                write_to_file(f"socio_economic/population/jrc/2020/population_{country}.tif","fname",
+                write_to_file(f"socio_economic/population/jrc/2020/population_{country}.tif","path",
                             os.path.join(processed_data_path,"data_layers","population_layers.csv"),key="pop_2020")
 
                 """Run the intersections of Energy Voronoi polygons with the Population raster grid layer
@@ -109,17 +140,26 @@ def main(config):
 
                 energy_details_csv = os.path.join(processed_data_path,"data_layers","energy_voronoi_layers.csv")
                 population_details_csv = os.path.join(processed_data_path,"data_layers","population_layers.csv")
+                features_df = create_feature_csv(energy_details_csv,population_details_csv,voronoi_path)
+                features_csv = os.path.join(processed_data_path,"data_layers",f"{country}_energy_voronoi_layers.csv")
+                features_df.to_csv(features_csv,index=False)
                 
                 run_energy_pop_intersections = True  # Set to True is you want to run this process
                 # Did a run earlier and it takes ~ 224 minutes (nearly 4 hours) to run for the whole of Africa!
                 # And generated a geoparquet with > 24 million rows! 
                 if run_energy_pop_intersections is True:
                     args = [
-                            "python",
-                            "vector_raster_intersections.py",
-                            f"{energy_details_csv}",
+                            "env", 
+                            "SNAIL_PROGRESS=1",
+                            "snail",
+                            "-vv",
+                            "process",
+                            "--features",
+                            f"{features_csv}",
+                            "--rasters",
                             f"{population_details_csv}",
-                            f"{voronoi_path}"
+                            "--directory",
+                            f"{processed_data_path}"
                             ]
                     print ("* Start the processing of energy voronoi and population raster intersections")
                     print (args)

@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import geopandas as gpd
 import itertools
+import ast
 import numpy as np
 import ast
 import warnings
@@ -138,7 +139,11 @@ def main(config,country,hazard_columns,direct_damages_folder,
             if network_effect is False:
                 no_adapt_asset_loss_df = pd.read_csv(no_adapt_asset_loss_file)
             else:
+                # no_adapt_asset_loss_df = pd.read_parquet(no_adapt_asset_loss_file,engine="fastparquet")
                 no_adapt_asset_loss_df = pd.read_parquet(no_adapt_asset_loss_file)
+                # if asset_info.asset_gpkg == "energy":
+                #     no_adapt_asset_loss_df["node_path"] = no_adapt_asset_loss_df.apply(lambda x: ast.literal_eval(x.node_path),axis=1)
+                #     no_adapt_asset_loss_df["edge_path"] = no_adapt_asset_loss_df.apply(lambda x: ast.literal_eval(x.edge_path),axis=1) 
             
             for hk in ["min","mean","max"]:
                 if len(asset_service_columns) > 1:
@@ -327,8 +332,10 @@ def main(config,country,hazard_columns,direct_damages_folder,
                                             f"adaptation_investment_{hk}" for hk in ["min","mean","max"]
                                             ]],
                                         how="left",on=[asset_id] + sector_columns  + hazard_columns)
-                adapt_targets_df.to_csv(os.path.join(direct_damages_results,
-                                f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.csv"),index=False)
+                # adapt_targets_df.to_csv(os.path.join(direct_damages_results,
+                #                 f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.csv"),index=False)
+                adapt_targets_df.to_parquet(os.path.join(direct_damages_results,
+                                f"{country}_{asset_info.asset_gpkg}_{asset_info.asset_layer}_asset_targets_costs.parquet"),index=False)
 
 
 if __name__ == "__main__":
