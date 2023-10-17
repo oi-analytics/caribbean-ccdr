@@ -161,7 +161,17 @@ def main(config,country,hazard_names,hazard_columns,direct_damages_folder,
                 cyclones = pd.concat(cyclones,axis=0,ignore_index=True)
                 asset_damages = pd.concat([asset_damages,cyclones],axis=0,ignore_index=True)
                 del cyclone, l, cyclones
-
+            coastal = asset_damages[(asset_damages["hazard"] == "coastal") & (asset_damages["rcp"] == "baseline")]
+            if len(coastal.index) > 0:
+                coasts = []
+                for epoch in [2030,2050]:
+                    l = coastal.copy()
+                    l["epoch"] = epoch
+                    l["rcp"] = "ssp126"
+                    coasts.append(l)
+                coasts = pd.concat(coasts,axis=0,ignore_index=True)
+                asset_damages = pd.concat([asset_damages,coasts],axis=0,ignore_index=True)
+                del coastal, l, coasts
 
             damage_sensitivity = pd.concat(damage_sensitivity,axis=0,ignore_index=True)
             # asset_damages.to_parquet(os.path.join(summary_results,

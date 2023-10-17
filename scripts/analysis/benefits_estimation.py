@@ -115,8 +115,8 @@ def main(config,country,
                                 "service_resilience_target_percentage"],
                                 dropna=False).agg(sum_dict).reset_index()
 
-            with_adapt_sector_loss_df = pd.merge(with_adapt_sector_loss_df,
-                                            with_adapt_asset_costs_df,
+            with_adapt_sector_loss_df = pd.merge(with_adapt_asset_costs_df,
+                                            with_adapt_sector_loss_df,
                                             how="left",
                                             on=idx_columns + [
                                                 "service_resilience_target_percentage"])

@@ -152,7 +152,7 @@ def energy_disruptions(asset_failure_set,supply_loss_set,
                 else:
                     energy_service_df["supply"] = energy_service_df[supply_column].copy()
                 
-                # supply_df = energy_service_df[["origin_id",supply_column,"supply"]].drop_duplicates(subset=["origin_id"], keep="first")
+                supply_df = energy_service_df[["origin_id",supply_column]].drop_duplicates(subset=["origin_id"], keep="first")
                 # demand_df = energy_service_df[["destination_id","assigned_service"]].drop_duplicates(subset=["destination_id"], keep="first")
                 # od_matrix = supply_df.merge(demand_df, how='cross')
                 # od_matrix = od_matrix[~(od_matrix.origin_id.isin(asset_failure_set) | od_matrix.destination_id.isin(asset_failure_set))]
@@ -170,7 +170,8 @@ def energy_disruptions(asset_failure_set,supply_loss_set,
                 if len(remaining_service_df.index) > 0:
                     # print (remaining_service_df)
                     remaining_service_df = remaining_service_df.groupby(["destination_id","assigned_service"])["supply"].sum().reset_index()
-                    disrupted_service = total_service - sum((1.0*remaining_service_df["supply"]/total_supply)*remaining_service_df["assigned_service"])
+                    # disrupted_service = total_service - sum((1.0*remaining_service_df["supply"]/total_supply)*remaining_service_df["assigned_service"])
+                    disrupted_service = (total_service*(supply_df[supply_column].sum())/total_supply) - sum((1.0*remaining_service_df["supply"]/total_supply)*remaining_service_df["assigned_service"])
                 else:
                     disrupted_service = total_service*(supply_df[supply_column].sum())/total_supply
                 return disrupted_service, 100.0*disrupted_service/total_service

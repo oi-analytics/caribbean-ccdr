@@ -17,9 +17,9 @@ def main(config):
     summary_folder = "direct_damages"
     service_loss_folder = "damage_service_losses"
 
-    network_csv = os.path.join(processed_data_path,
-                            "data_layers",
-                            "network_layers_hazard_intersections_details.csv")
+    # network_csv = os.path.join(processed_data_path,
+    #                         "data_layers",
+    #                         "network_layers_hazard_intersections_details.csv")
     service_csv = os.path.join(processed_data_path,
                             "data_layers",
                             "service_growth_rates.csv")
@@ -32,14 +32,14 @@ def main(config):
     adaptation_options = ["no_adaptation","with_adaptation"]
     # adaptation_options = ["no_adaptation"]
     # adaptation_options = ["with_adaptation"]
-    # countries = ["dma","grd","lca","vct"]
+    countries = ["dma","grd","lca","vct"]
     countries = ["vct"]
     # hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","chaz_cyclones"]
     hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","storm_cyclones"]
     # hazard_columns = ["hazard","isoa3","epoch","rcp","rp","precipitation_factor"]
     hazard_columns = ["hazard","isoa3","epoch","rcp","rp"]
     development_scenarios = ["bau","sdg"]
-    # development_scenarios = ["bau"]
+    # development_scenarios = ["sdg"]
     parameter_combinations_file = "parameter_combinations.txt"
     generate_new_parameters = True
     if generate_new_parameters is True:
@@ -66,6 +66,14 @@ def main(config):
         summary_folder = f"{adapt_option}/direct_damages"
         service_loss_folder = f"{adapt_option}/damage_service_losses"
         for country in countries:
+            if country == "grd":
+                network_csv = os.path.join(processed_data_path,
+                            "data_layers",
+                            "network_layers_hazard_intersections_details_grd.csv")
+            else:
+                network_csv = os.path.join(processed_data_path,
+                            "data_layers",
+                            "network_layers_hazard_intersections_details.csv")
             for dev_sc in development_scenarios:
                 for hazard_name in hazards:
                     hazard_csv = os.path.join(processed_data_path,
