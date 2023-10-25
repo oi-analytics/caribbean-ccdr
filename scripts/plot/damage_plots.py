@@ -1,4 +1,10 @@
-"""Generate hazard-damage curves
+"""Generate plots for: 
+    - Aggregated direct damages per climate scenario and RP
+    - Aggregated direct damages per climate scenario, hazard and RP
+    - Mean direct damages per hazard and sector for landslides (RP=1) and other hazards (RP=100)
+    - Matrix of pre-adaptation & post-disaster service resilience for: 
+        - Sector 
+        - Hazard [landslides (RP=1) and other hazards (RP=100)]
 """
 import os
 import sys
@@ -272,10 +278,6 @@ def main(config):
                                 fontsize=15,
                                 fontweight="bold")
             plt.grid(None)
-            # Rotate the tick labels and set their alignment.
-            # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-            #          rotation_mode="anchor")
-
             # Loop over data dimensions and create text annotations.
             for i in range(len(y_labels)):
                 for j in range(len(x_labels)):

@@ -1,4 +1,6 @@
-"""Generate hazard-damage curves
+"""Generate plots for: 
+    - Marginal resilience curves
+    - Total investment to meet specific targets 
 """
 import os
 import sys
@@ -189,14 +191,14 @@ def main(config):
                     damage_data = pd.read_excel(
                                     os.path.join(output_data_path,
                                         "adaptation_outcomes",
-                                        "aggregated_results",
+                                        "aggregated_results_with_targets",
                                         f"{country}_total_risks_investments_with_resilience_goals.xlsx"),
                                     sheet_name=dsc)
                 else:
                     damage_data = pd.read_excel(
                                     os.path.join(output_data_path,
                                         "adaptation_outcomes",
-                                        "aggregated_results",
+                                        "aggregated_results_with_targets",
                                         f"{country}_total_risks_investments_with_90_percent_resilience.xlsx"),
                                     sheet_name=dsc)
                 ymax = multiply_factor*damage_data["avoided_damage_max"].max()
@@ -208,7 +210,7 @@ def main(config):
                             yerr=(multiply_factor*(df[f"avoided_damage_mean"] - df[f"avoided_damage_min"]),
                                     multiply_factor*(df[f"avoided_damage_max"] - df[f"avoided_damage_mean"])),
                             capsize=5,
-                            label="Landslide avoided losses")
+                            label="Landslide - Avoided damages")
                 df = damage_data[(damage_data.rcp.isin(["ssp245"])) & (damage_data.epoch.isin([2030])) & (damage_data.rp > 1)]
                 x_vals = np.arange(3.5, 4*len(df.index),4) + offset
                 ax.bar(x_vals,multiply_factor*df[f"avoided_damage_mean"],
