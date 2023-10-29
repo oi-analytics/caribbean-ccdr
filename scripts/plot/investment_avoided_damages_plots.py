@@ -46,6 +46,7 @@ def main(config):
         damage_data = pd.read_excel(
                         os.path.join(output_data_path,
                             "adaptation_outcomes",
+                            f"{country}_aggregated_results_for_macroeconomic_analysis",
                             f"{country}_all_assets_risks_investments.xlsx"),
                         sheet_name="bau")
         damage_data = damage_data[
@@ -106,14 +107,14 @@ def main(config):
                     damage_data = pd.read_excel(
                                     os.path.join(output_data_path,
                                         "adaptation_outcomes",
-                                        "aggregated_results",
+                                        "aggregated_results_with_targets",
                                         f"{country}_total_risks_investments_with_resilience_goals.xlsx"),
                                     sheet_name=dsc)
                 else:
                     damage_data = pd.read_excel(
                                     os.path.join(output_data_path,
                                         "adaptation_outcomes",
-                                        "aggregated_results",
+                                        "aggregated_results_with_targets",
                                         f"{country}_total_risks_investments_with_90_percent_resilience.xlsx"),
                                     sheet_name=dsc)
                 ymax = max(ymax,max(multiply_factor*(damage_data[f"{adapt_col}_max"] + damage_data[f"{new_build_col}_max"])))

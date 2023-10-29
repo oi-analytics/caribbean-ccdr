@@ -46,6 +46,7 @@ def main(config):
         damage_data = pd.read_excel(
                         os.path.join(output_data_path,
                             "adaptation_outcomes",
+                            "aggregated_results",
                             f"{country}_aggregated_risks_investments.xlsx"),
                         sheet_name="bau")
         damage_data = damage_data[damage_data.existing_asset_adaptation_implemented == "no"]
@@ -107,6 +108,7 @@ def main(config):
         damage_data = pd.read_excel(
                         os.path.join(output_data_path,
                             "adaptation_outcomes",
+                            f"{country}_aggregated_results_for_macroeconomic_analysis",
                             f"{country}_total_risks_investments.xlsx"),
                         sheet_name="bau")
         damage_data = damage_data[
@@ -175,6 +177,7 @@ def main(config):
         damage_data = pd.read_excel(
                         os.path.join(output_data_path,
                             "adaptation_outcomes",
+                            f"{country}_aggregated_results_for_macroeconomic_analysis",
                             f"{country}_all_assets_risks_investments.xlsx"),
                         sheet_name="bau")
         damage_data = damage_data[
@@ -231,6 +234,7 @@ def main(config):
             damage_data = pd.read_excel(
                             os.path.join(output_data_path,
                                 "adaptation_outcomes",
+                                f"{country}_aggregated_results_for_macroeconomic_analysis",
                                 f"{country}_all_assets_risks_investments.xlsx"),
                             sheet_name=dsc)
             if dsc == "bau":
