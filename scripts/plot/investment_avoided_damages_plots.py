@@ -30,6 +30,7 @@ def main(config):
     figures_data_path = config['paths']['figures']
 
     countries = ["dma","grd","lca","vct"]
+    countries = ["grd"]
     development_scenarios = ["bau","sdg"]
     development_scenarios_colors = [("#9ebcda","#8856a7"),("#99d8c9","#2ca25f")]
     rcps = ["ssp126","ssp245","ssp585"]

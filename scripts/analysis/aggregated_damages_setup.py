@@ -15,7 +15,7 @@ def main(config):
 
     adaptation_options = ["no_adaptation","with_adaptation"]
     countries = ["dma","grd","lca","vct"]
-    # countries = ["dma"]
+    countries = ["grd"]
     hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","storm_cyclones"]
     # hazard_columns = ["hazard","isoa3","epoch","rcp","rp","precipitation_factor"]
     # edge_id sector  subsector   asset_layer exposure_unit   damage_cost_unit    hazard  isoa3   epoch   rcp rp

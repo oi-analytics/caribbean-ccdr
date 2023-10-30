@@ -6,6 +6,7 @@ import ujson
 import itertools
 import geopandas as gpd
 import pandas as pd
+import numpy as np
 from analysis_utils import *
 import subprocess 
 
@@ -17,10 +18,15 @@ def main(config):
     countries = ["lca"]
     hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","chaz_cyclones"]
 
-    file_name = "lca_energy_splits__chaz_cyclones_lca__areas.geoparquet"
-    df = gpd.read_parquet(os.path.join(results_path,"hazard_asset_intersections",file_name))
-    print (df)
-    df.to_csv("test.csv",index=False)
+    hazard_file = pd.read_csv(os.path.join(processed_data_path,"hazards","fathom_pluvial_fluvial_grd.csv"))
+    hazard_keys = hazard_file["key"].values.tolist()
+    sectors  = ["airports","ports"]
+    for sector in sectors:
+        file_name = f"grd_{sector}_splits__fathom_pluvial_fluvial_grd__areas.geoparquet"
+        df = gpd.read_parquet(os.path.join(results_path,"hazard_asset_intersections",file_name))
+        df[hazard_keys] = np.where(df[hazard_keys] > 990,0,df[hazard_keys])
+        print (df)
+        df.to_parquet(os.path.join(results_path,"hazard_asset_intersections",file_name),index=False)
 
     # df = gpd.read_file(os.path.join(processed_data_path,"infrastructure","transport","lca_airports.gpkg"),layer="areas")
     # df["area"] = df.geometry.area

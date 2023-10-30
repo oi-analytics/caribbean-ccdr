@@ -34,6 +34,7 @@ def main(config):
     figures_data_path = config['paths']['figures']
 
     countries = ["dma","grd","lca","vct"]
+    countries = ["grd"]
     rcps = ["ssp126","ssp245","ssp585"]
     rcp_colors = ["#8c96c6","#8c6bb1","#88419d"]
     hazards = ["coastal","fluvial_defended","pluvial","cyclone_windspeed"]

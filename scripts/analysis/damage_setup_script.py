@@ -33,7 +33,7 @@ def main(config):
     # adaptation_options = ["no_adaptation"]
     # adaptation_options = ["with_adaptation"]
     countries = ["dma","grd","lca","vct"]
-    countries = ["vct"]
+    countries = ["grd"]
     # hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","chaz_cyclones"]
     hazards = ["charim_landslide","deltares_storm_surge","fathom_pluvial_fluvial","storm_cyclones"]
     # hazard_columns = ["hazard","isoa3","epoch","rcp","rp","precipitation_factor"]
