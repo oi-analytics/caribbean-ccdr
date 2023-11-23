@@ -1,0 +1,21 @@
+name: caribbean-ccdr
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - cartopy
+  - fiona
+  - geopandas
+  - igraph
+  - jupyter
+  - matplotlib
+  - networkx
+  - numpy
+  - pandas
+  - rasterio
+  - rioxarray
+  - shapely
+  - snkit
+  - tqdm
+  - ujson
