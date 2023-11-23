@@ -23,8 +23,14 @@ micromamba activate caribbean-ccdr
 
 ## Acknowledgments
 
-This project was developed by Raghav Pant, Alison Peard and Tom Russell at
+This codebase was developed by Raghav Pant, Alison Peard and Tom Russell at
 Oxford Infrastructure Analytics as part of a World Bank project in 2022-2023.
+
+Citation:
+
+> Pant R., Peard, A., Thacker, S., Jaramillo, D., Russell, T., & Hall, J.W. (2023). Estimating
+> investment needs for climate adaptation in the Eastern Caribbean. Final Report, Oxford
+> Infrastructure Analytics Ltd., Oxford, UK.
 
 The code is made available under an MIT license, see [`LICENSE`](./LICENSE) for
 details.
