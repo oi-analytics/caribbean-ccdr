@@ -3,7 +3,7 @@
 #
 # Summarise downloaded change factors
 #
-echo "variable,calculation,ssp,epoch,isoa3,country,value" > summary.csv
+echo "variable,statistic,calculation,ssp,epoch,isoa3,country,value" > summary.csv
 
 # pull relevant lines out of downloaded CSVs
 grep Dominica scraped/*.csv >> summary.csv
@@ -15,4 +15,4 @@ grep "St. Vincent and the Grenadines" scraped/*.csv >> summary.csv
 sed 's/scraped\/extremes_climatology_//' -i summary.csv
 sed 's/_/,/g' -i summary.csv
 sed 's/.csv:/,/' -i summary.csv
-sed 's/median,annual,//g' -i summary.csv
+sed 's/annual,//g' -i summary.csv
