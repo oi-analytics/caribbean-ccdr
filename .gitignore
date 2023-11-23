@@ -5,6 +5,7 @@ data/*
 incoming_data/*
 figures/*
 processed_data/*
+results/*
 .bak/*
 
 # Editor config
